@@ -386,7 +386,7 @@ mod raylib_rs_platform {
 
                 // I don't know why the texture lookup seems to be offset by these
                 // amounts, but it seems to be.
-                const X_SOURCE_FUDGE: f32 = -2.;
+                const X_SOURCE_FUDGE: f32 = -1.;
                 const Y_SOURCE_FUDGE: f32 = -1.;
 
                 for cmd in commands.0.iter() {
