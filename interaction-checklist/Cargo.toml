@@ -6,7 +6,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-game = { path = "../game" }
+app = { path = "../app" }
 # Pin the version, including raylib-sys becasue as of this writing, the raylib
 # packages do not follow semver.
 raylib = "= 3.7.0"

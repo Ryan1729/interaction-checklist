@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 
 struct Storage<A>(Vec<A>);
 
-impl <A> game::ClearableStorage<A> for Storage<A> {
+impl <A> app::ClearableStorage<A> for Storage<A> {
     fn clear(&mut self) {
         self.0.clear();
     }
@@ -22,7 +22,7 @@ const SPRITESHEET_BYTES: &[u8] = include_bytes!("../assets/spritesheet.png");
 
 const SPRITE_PIXELS_PER_TILE_SIDE: f32 = 16.0;
 
-use game::{SpriteKind, ArrowKind, Dir};
+use app::{SpriteKind, ArrowKind, Dir};
 
 struct SourceSpec {
     x: f32,
@@ -109,10 +109,10 @@ mod raylib_rs_platform {
         convert::TryInto,
     };
 
-    fn draw_wh(rl: &RaylibHandle) -> game::DrawWH {
-        game::DrawWH {
-            w: rl.get_screen_width() as game::DrawW,
-            h: rl.get_screen_height() as game::DrawH,
+    fn draw_wh(rl: &RaylibHandle) -> app::DrawWH {
+        app::DrawWH {
+            w: rl.get_screen_width() as app::DrawW,
+            h: rl.get_screen_height() as app::DrawH,
         }
     }
 
@@ -200,7 +200,7 @@ mod raylib_rs_platform {
         // each frame?
         const RENDER_TARGET_SIZE: u32 = 2048;
 
-        // We'll let the OS reclaim the memory when the game closes.
+        // We'll let the OS reclaim the memory when the app closes.
         let mut render_target = rl.load_render_texture(
             &thread,
             RENDER_TARGET_SIZE,
@@ -222,11 +222,11 @@ mod raylib_rs_platform {
         };
         println!("{}", seed);
 
-        let mut state = game::State::from_seed(seed.to_le_bytes());
+        let mut state = app::State::from_seed(seed.to_le_bytes());
         let mut commands = Storage(Vec::with_capacity(1024));
 
         // generate the commands for the first frame
-        game::update(&mut state, &mut commands, 0, draw_wh(&rl));
+        app::update(&mut state, &mut commands, 0, draw_wh(&rl));
 
         const BACKGROUND: Color = Color{ r: 0x22, g: 0x22, b: 0x22, a: 255 };
         const WHITE: Color = Color{ r: 0xee, g: 0xee, b: 0xee, a: 255 };
@@ -287,45 +287,45 @@ mod raylib_rs_platform {
             let mut input_flags = 0;
 
             if rl.is_key_pressed(KEY_SPACE) || rl.is_key_pressed(KEY_ENTER) {
-                input_flags |= game::INPUT_INTERACT_PRESSED;
+                input_flags |= app::INPUT_INTERACT_PRESSED;
             }
 
             if rl.is_key_down(KEY_UP) || rl.is_key_down(KEY_W) {
-                input_flags |= game::INPUT_UP_DOWN;
+                input_flags |= app::INPUT_UP_DOWN;
             }
 
             if rl.is_key_down(KEY_DOWN) || rl.is_key_down(KEY_S) {
-                input_flags |= game::INPUT_DOWN_DOWN;
+                input_flags |= app::INPUT_DOWN_DOWN;
             }
 
             if rl.is_key_down(KEY_LEFT) || rl.is_key_down(KEY_A) {
-                input_flags |= game::INPUT_LEFT_DOWN;
+                input_flags |= app::INPUT_LEFT_DOWN;
             }
 
             if rl.is_key_down(KEY_RIGHT) || rl.is_key_down(KEY_D) {
-                input_flags |= game::INPUT_RIGHT_DOWN;
+                input_flags |= app::INPUT_RIGHT_DOWN;
             }
 
             if rl.is_key_pressed(KEY_UP) || rl.is_key_pressed(KEY_W) {
-                input_flags |= game::INPUT_UP_PRESSED;
+                input_flags |= app::INPUT_UP_PRESSED;
             }
 
             if rl.is_key_pressed(KEY_DOWN) || rl.is_key_pressed(KEY_S) {
-                input_flags |= game::INPUT_DOWN_PRESSED;
+                input_flags |= app::INPUT_DOWN_PRESSED;
             }
 
             if rl.is_key_pressed(KEY_LEFT) || rl.is_key_pressed(KEY_A) {
-                input_flags |= game::INPUT_LEFT_PRESSED;
+                input_flags |= app::INPUT_LEFT_PRESSED;
             }
 
             if rl.is_key_pressed(KEY_RIGHT) || rl.is_key_pressed(KEY_D) {
-                input_flags |= game::INPUT_RIGHT_PRESSED;
+                input_flags |= app::INPUT_RIGHT_PRESSED;
             }
 
             current_stats.input_gather.end = Instant::now();
             current_stats.update.start = current_stats.input_gather.end;
 
-            game::update(
+            app::update(
                 &mut state,
                 &mut commands,
                 input_flags,
@@ -342,7 +342,7 @@ mod raylib_rs_platform {
                 height: rl.get_screen_height() as _
             };
 
-            let sizes = game::sizes(&state);
+            let sizes = app::sizes(&state);
 
             let mut d = rl.begin_drawing(&thread);
 
@@ -390,7 +390,7 @@ mod raylib_rs_platform {
                 const Y_SOURCE_FUDGE: f32 = -1.;
 
                 for cmd in commands.0.iter() {
-                    use game::draw::Command::*;
+                    use app::draw::Command::*;
                     match cmd {
                         Sprite(s) => {
                             let spec = source_spec(s.sprite);
@@ -422,7 +422,7 @@ mod raylib_rs_platform {
                             );
                         }
                         Text(t) => {
-                            use game::draw::TextKind;
+                            use app::draw::TextKind;
                             match t.kind {
                                 TextKind::UI => {
                                     shader_d.draw_text_rec(
