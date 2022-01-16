@@ -8,4 +8,4 @@ For the inital template I wanted arrow tiles and a a little character to move ar
 
 I decided that a solid colour for checked cells, where the edges would connect each other, was good for this use case, since the checked cells and the unchecked cells are conceptually disjoint sets. We want the checked cells to overtake the unchecked ones. So the blob expanding seems appropriate.
 
-The checkmark itself was hand-drawn by me. I drew it with 2-by-2 blocks of pixels. First was a diagonally-down line where the blocks did not overlap, then a second "45 degree" line upward, which overlapped the first, where the blocks consistently overlaped the previous block by one pixel.
+The checkmark itself was hand-drawn by me. I drew it with 2-by-2 blocks of pixels. First was a diagonally-down line where the blocks did not overlap, then a second "45 degree" line upward, which overlapped the first, where the blocks consistently overlapped the previous block by one pixel.
