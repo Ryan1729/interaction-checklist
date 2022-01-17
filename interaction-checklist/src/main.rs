@@ -207,22 +207,7 @@ mod raylib_rs_platform {
             RENDER_TARGET_SIZE
         ).unwrap();
 
-        let seed: u128 = {
-            use std::time::SystemTime;
-
-            let duration = match
-                SystemTime::now()
-                    .duration_since(SystemTime::UNIX_EPOCH)
-            {
-                Ok(d) => d,
-                Err(err) => err.duration(),
-            };
-
-            duration.as_nanos()
-        };
-        println!("{}", seed);
-
-        let mut state = app::State::from_seed(seed.to_le_bytes());
+        let mut state = app::State::default();
         let mut commands = Storage(Vec::with_capacity(1024));
 
         // generate the commands for the first frame

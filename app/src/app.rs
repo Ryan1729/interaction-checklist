@@ -17,81 +17,6 @@ pub trait ClearableStorage<A> {
     fn push(&mut self, a: A);
 }
 
-pub type Seed = [u8; 16];
-
-type Xs = [core::num::Wrapping<u32>; 4];
-
-fn xorshift(xs: &mut Xs) -> u32 {
-    let mut t = xs[3];
-
-    xs[3] = xs[2];
-    xs[2] = xs[1];
-    xs[1] = xs[0];
-
-    t ^= t << 11;
-    t ^= t >> 8;
-    xs[0] = t ^ xs[0] ^ (xs[0] >> 19);
-
-    xs[0].0
-}
-
-#[allow(unused)]
-fn xs_u32(xs: &mut Xs, min: u32, one_past_max: u32) -> u32 {
-    (xorshift(xs) % (one_past_max - min)) + min
-}
-
-#[allow(unused)]
-fn xs_shuffle<A>(rng: &mut Xs, slice: &mut [A]) {
-    for i in 1..slice.len() as u32 {
-        // This only shuffles the first u32::MAX_VALUE - 1 elements.
-        let r = xs_u32(rng, 0, i + 1) as usize;
-        let i = i as usize;
-        slice.swap(i, r);
-    }
-}
-
-#[allow(unused)]
-fn new_seed(rng: &mut Xs) -> Seed {
-    let s0 = xorshift(rng).to_le_bytes();
-    let s1 = xorshift(rng).to_le_bytes();
-    let s2 = xorshift(rng).to_le_bytes();
-    let s3 = xorshift(rng).to_le_bytes();
-
-    [
-        s0[0], s0[1], s0[2], s0[3],
-        s1[0], s1[1], s1[2], s1[3],
-        s2[0], s2[1], s2[2], s2[3],
-        s3[0], s3[1], s3[2], s3[3],
-    ]
-}
-
-fn xs_from_seed(mut seed: Seed) -> Xs {
-    // 0 doesn't work as a seed, so use this one instead.
-    if seed == [0; 16] {
-        seed = 0xBAD_5EED_u128.to_le_bytes();
-    }
-
-    macro_rules! wrap {
-        ($i0: literal, $i1: literal, $i2: literal, $i3: literal) => {
-            core::num::Wrapping(
-                u32::from_le_bytes([
-                    seed[$i0],
-                    seed[$i1],
-                    seed[$i2],
-                    seed[$i3],
-                ])
-            )
-        }
-    }
-
-    [
-        wrap!( 0,  1,  2,  3),
-        wrap!( 4,  5,  6,  7),
-        wrap!( 8,  9, 10, 11),
-        wrap!(12, 13, 14, 15),
-    ]
-}
-
 /// This type alias makes adding a custom newtype easy.
 pub type X = f32;
 /// This type alias makes adding a custom newtype easy.
@@ -118,44 +43,10 @@ pub use draw::{
     Sizes,
 };
 
-macro_rules! from_rng_enum_def {
-    ($name: ident { $( $variants: ident ),+ $(,)? }) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        pub enum $name {
-            $( $variants ),+
-        }
-
-        impl $name {
-            pub const COUNT: usize = {
-                let mut count = 0;
-
-                $(
-                    // Some reference to the vars is needed to use
-                    // the repetitions.
-                    let _ = Self::$variants;
-
-                    count += 1;
-                )+
-
-                count
-            };
-
-            pub const ALL: [Self; Self::COUNT] = [
-                $(Self::$variants,)+
-            ];
-        
-            pub fn from_rng(rng: &mut Xs) -> Self {
-                Self::ALL[xs_u32(rng, 0, Self::ALL.len() as u32) as usize]
-            }
-        }
-    }
-}
-
-from_rng_enum_def!{
-    ArrowKind {
-        Red,
-        Green
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArrowKind {
+    Red,
+    Green
 }
 
 impl Default for ArrowKind {
@@ -164,17 +55,16 @@ impl Default for ArrowKind {
     }
 }
 
-from_rng_enum_def!{
-    Dir {
-        Up,
-        UpRight,
-        Right,
-        DownRight,
-        Down,
-        DownLeft,
-        Left,
-        UpLeft,
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Dir {
+    Up,
+    UpRight,
+    Right,
+    DownRight,
+    Down,
+    DownLeft,
+    Left,
+    UpLeft,
 }
 
 impl Default for Dir {
@@ -184,8 +74,6 @@ impl Default for Dir {
 }
 
 mod tile {
-    use crate::{Xs, xs_u32};
-
     pub type Count = u32;
 
     pub type Coord = u8;
@@ -196,10 +84,6 @@ mod tile {
     impl X {
         pub const MAX: Coord = 0b1111;
         pub const COUNT: Count = (X::MAX as Count) + 1;
-
-        pub fn from_rng(rng: &mut Xs) -> Self {
-            Self(xs_u32(rng, 0, Self::COUNT) as Coord)
-        }
 
         pub fn saturating_add_one(&self) -> Self {
             Self(core::cmp::min(self.0.saturating_add(1), Self::MAX))
@@ -222,10 +106,6 @@ mod tile {
     impl Y {
         pub const MAX: Coord = 0b1111;
         pub const COUNT: Count = (Y::MAX as Count) + 1;
-
-        pub fn from_rng(rng: &mut Xs) -> Self {
-            Self(xs_u32(rng, 0, Self::COUNT) as Coord)
-        }
 
         pub fn saturating_add_one(&self) -> Self {
             Self(core::cmp::min(self.0.saturating_add(1), Self::MAX))
@@ -250,13 +130,6 @@ mod tile {
 
     impl XY {
         pub const COUNT: Count = X::COUNT * Y::COUNT;
-
-        pub fn from_rng(rng: &mut Xs) -> Self {
-            Self {
-                x: X::from_rng(rng),
-                y: Y::from_rng(rng),
-            }
-        }
 
         pub fn move_up(&mut self) {
             self.y = self.y.saturating_sub_one();
@@ -319,13 +192,6 @@ struct TileData {
 }
 
 impl TileData {
-    fn from_rng(rng: &mut Xs) -> Self {
-        Self {
-            dir: Dir::from_rng(rng),
-            arrow_kind: ArrowKind::from_rng(rng),
-        }
-    }
-
     fn sprite(&self) -> SpriteKind {
         SpriteKind::Arrow(self.dir, self.arrow_kind)
     }
@@ -344,20 +210,6 @@ impl Default for Tiles {
     fn default() -> Self {
         Self {
             tiles: [TileData::default(); TILES_LENGTH as _],
-        }
-    }
-}
-
-impl Tiles {
-    fn from_rng(rng: &mut Xs) -> Self {
-        let mut tiles = [TileData::default(); TILES_LENGTH as _];
-
-        for tile_data in tiles.iter_mut() {
-            *tile_data = TileData::from_rng(rng);
-        }
-
-        Self {
-            tiles
         }
     }
 }
@@ -408,22 +260,6 @@ struct Board {
     eye: Eye,
 }
 
-impl Board {
-    fn from_seed(seed: Seed) -> Self {
-        let mut rng = xs_from_seed(seed);
-
-        let tiles = Tiles::from_rng(&mut rng);
-
-        Self {
-            tiles,
-            eye: Eye {
-                xy: tile::XY::from_rng(&mut rng),
-                ..<_>::default()
-            },
-        }
-    }
-}
-
 /// 64k animation frames ought to be enough for anybody!
 type AnimationTimer = u16;
 
@@ -435,15 +271,6 @@ pub struct State {
     sizes: draw::Sizes,
     board: Board,
     animation_timer: AnimationTimer
-}
-
-impl State {
-    pub fn from_seed(seed: Seed) -> Self {
-        Self {
-            board: Board::from_seed(seed),
-            ..<_>::default()
-        }
-    }
 }
 
 pub fn sizes(state: &State) -> draw::Sizes {
