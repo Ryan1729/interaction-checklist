@@ -33,6 +33,7 @@ fn source_spec(sprite: SpriteKind) -> SourceSpec {
     use ArrowKind::*;
     use Dir::*;
     use SpriteKind::*;
+    use app::UiState::*;
 
     let sx = match sprite {
         NeutralEye
@@ -43,7 +44,9 @@ fn source_spec(sprite: SpriteKind) -> SourceSpec {
         | NarrowRightEye
         | ClosedEye
         | HalfLidEye => 0.,
-        Arrow(_, Green)| DirEye(_) => 1.
+        Arrow(_, Green)| DirEye(_) => 1.,
+        Unchecked(_) => 2.,
+        Checked(_) => 3.,
     };
 
     let sy = match sprite {
@@ -70,6 +73,9 @@ fn source_spec(sprite: SpriteKind) -> SourceSpec {
         NarrowRightEye => 12.,
         NarrowLeftEye => 13.,
         SmallPupilEye => 14.,
+        Unchecked(Idle) | Checked(Idle) => 0.,
+        Unchecked(Hover) | Checked(Hover) => 1.,
+        Unchecked(Pressed) | Checked(Pressed) => 1.,
     };
 
     SourceSpec {
@@ -371,8 +377,8 @@ mod raylib_rs_platform {
 
                 // I don't know why the texture lookup seems to be offset by these
                 // amounts, but it seems to be.
-                const X_SOURCE_FUDGE: f32 = -1.;
-                const Y_SOURCE_FUDGE: f32 = -1.;
+                const X_SOURCE_FUDGE: f32 = -0.25;
+                const Y_SOURCE_FUDGE: f32 = -0.25;
 
                 for cmd in commands.0.iter() {
                     use app::draw::Command::*;

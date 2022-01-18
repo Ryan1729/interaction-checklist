@@ -137,7 +137,7 @@ pub fn fresh_sizes(wh: DrawWH) -> Sizes {
     }
 }
 
-use crate::{ArrowKind, Dir};
+use crate::{cell::UiState, ArrowKind, Dir};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpriteKind {
@@ -150,6 +150,8 @@ pub enum SpriteKind {
     NarrowRightEye,
     ClosedEye,
     HalfLidEye,
+    Unchecked(UiState),
+    Checked(UiState),
 }
 
 impl Default for SpriteKind {

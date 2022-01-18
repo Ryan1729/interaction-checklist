@@ -181,21 +181,41 @@ fn draw_xy_from_tile(sizes: &Sizes, txy: tile::XY) -> DrawXY {
     }
 }
 
-/// A Tile should always be at a particular position, but that position should be 
-/// derivable from the tiles location in the tiles array, so it doesn't need to be
-/// stored. But, we often want to get the tile's data and it's location as a single
-/// thing. This is why we have both `Tile` and `TileData`
-#[derive(Copy, Clone, Debug, Default)]
-struct TileData {
-    dir: Dir,
-    arrow_kind: ArrowKind,
-}
+mod cell {
+    use crate::draw::SpriteKind;
 
-impl TileData {
-    fn sprite(&self) -> SpriteKind {
-        SpriteKind::Arrow(self.dir, self.arrow_kind)
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+    pub enum UiState {
+        Idle,
+        Hover,
+        Pressed
+    }
+    
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+    pub(crate) enum Status {
+        Unchecked,
+        #[allow(unused)]
+        Checked
+    }
+
+    impl Default for Status {
+        fn default() -> Self {
+            Self::Unchecked
+        }
+    }
+    
+    impl Status {
+        pub(crate) fn sprite_fn(self) -> fn(UiState) -> SpriteKind {
+            match self {
+                Self::Unchecked => SpriteKind::Unchecked,
+                Self::Checked => SpriteKind::Checked,
+            }
+        }
     }
 }
+pub use cell::UiState;
+
+type TileData = cell::Status;
 
 pub const TILES_LENGTH: usize = tile::XY::COUNT as _;
 
@@ -436,7 +456,7 @@ pub fn update(
         let txy = tile::i_to_xy(i);
 
         commands.push(Sprite(SpriteSpec{
-            sprite: tile_data.sprite(),
+            sprite: (tile_data.sprite_fn())(UiState::Idle),
             xy: draw_xy_from_tile(&state.sizes, txy),
         }));
     }
