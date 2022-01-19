@@ -33,7 +33,7 @@ pub mod draw;
 pub use draw::{
     DrawLength,
     DrawX,
-    DrawY, 
+    DrawY,
     DrawXY,
     DrawW,
     DrawH,
@@ -163,7 +163,7 @@ mod tile {
                 (index % X::COUNT as usize) as Count
             )),
             y: Y(to_coord_or_default(
-                ((index % (XY::COUNT as usize) as usize) 
+                ((index % (XY::COUNT as usize) as usize)
                 / X::COUNT as usize) as Count
             )),
         }
@@ -190,7 +190,7 @@ mod cell {
         Hover,
         Pressed
     }
-    
+
     #[derive(Copy, Clone, Debug, Eq, PartialEq)]
     pub(crate) enum Status {
         Unchecked,
@@ -203,7 +203,7 @@ mod cell {
             Self::Unchecked
         }
     }
-    
+
     impl Status {
         pub(crate) fn sprite_fn(self) -> fn(UiState) -> SpriteKind {
             match self {
@@ -274,6 +274,53 @@ struct Eye {
     state: EyeState,
 }
 
+#[derive(Copy, Clone, Debug)]
+enum ButtonState {
+    Up,
+    #[allow(unused)]
+    Down,
+}
+
+impl Default for ButtonState {
+    fn default() -> Self {
+        ButtonState::Up
+    }
+}
+
+pub type CursorXY = DrawXY;
+
+#[derive(Debug, Default)]
+pub struct Ui {
+    sizes: draw::Sizes,
+    cursor_xy: CursorXY,
+    left_mouse_button: ButtonState,
+}
+
+impl Ui {
+    fn tile_state(&self, txy: tile::XY) -> UiState {
+        let xy: DrawXY = draw_xy_from_tile(&self.sizes, txy);
+        let min_x = xy.x;
+        let min_y = xy.y;
+        let max_x = min_x + self.sizes.tile_side_length;
+        let max_y = min_y + self.sizes.tile_side_length;
+
+        // Use half-open ranges so the cells can abut each other, but no location
+        // is on two different cells. (TODO test this? Are we going to end up
+        // wanting fixed point here?)
+        let is_in_tile =
+            self.cursor_xy.x >= min_x
+            && self.cursor_xy.x < max_x
+            && self.cursor_xy.y >= min_y
+            && self.cursor_xy.y < max_y;
+
+        match (is_in_tile, self.left_mouse_button) {
+            (false, _) => UiState::Idle,
+            (true, ButtonState::Up) => UiState::Hover,
+            (true, ButtonState::Down) => UiState::Pressed,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 struct Board {
     tiles: Tiles,
@@ -288,13 +335,13 @@ const ANIMATION_TIMER_LENGTH: AnimationTimer = 60 * 60 * 18;
 
 #[derive(Debug, Default)]
 pub struct State {
-    sizes: draw::Sizes,
+    ui: Ui,
     board: Board,
     animation_timer: AnimationTimer
 }
 
 pub fn sizes(state: &State) -> draw::Sizes {
-    state.sizes.clone()
+    state.ui.sizes.clone()
 }
 
 pub type InputFlags = u16;
@@ -350,13 +397,15 @@ pub fn update(
     state: &mut State,
     commands: &mut dyn ClearableStorage<draw::Command>,
     input_flags: InputFlags,
+    cursor_xy: CursorXY,
     draw_wh: DrawWH,
 ) {
     use draw::{TextSpec, TextKind, Command::*};
 
-    if draw_wh != state.sizes.draw_wh {
-        state.sizes = draw::fresh_sizes(draw_wh);
+    if draw_wh != state.ui.sizes.draw_wh {
+        state.ui.sizes = draw::fresh_sizes(draw_wh);
     }
+    state.ui.cursor_xy = cursor_xy;
 
     commands.clear();
 
@@ -456,21 +505,21 @@ pub fn update(
         let txy = tile::i_to_xy(i);
 
         commands.push(Sprite(SpriteSpec{
-            sprite: (tile_data.sprite_fn())(UiState::Idle),
-            xy: draw_xy_from_tile(&state.sizes, txy),
+            sprite: (tile_data.sprite_fn())(state.ui.tile_state(txy)),
+            xy: draw_xy_from_tile(&state.ui.sizes, txy),
         }));
     }
 
     commands.push(Sprite(SpriteSpec{
         sprite: state.board.eye.state.sprite(),
-        xy: draw_xy_from_tile(&state.sizes, state.board.eye.xy),
+        xy: draw_xy_from_tile(&state.ui.sizes, state.board.eye.xy),
     }));
 
-    let left_text_x = state.sizes.play_xywh.x + MARGIN;
+    let left_text_x = state.ui.sizes.play_xywh.x + MARGIN;
 
     const MARGIN: f32 = 16.;
 
-    let small_section_h = state.sizes.draw_wh.h / 8. - MARGIN;
+    let small_section_h = state.ui.sizes.draw_wh.h / 8. - MARGIN;
 
     {
         let mut y = MARGIN;
@@ -482,7 +531,7 @@ pub fn update(
             ),
             xy: DrawXY { x: left_text_x, y },
             wh: DrawWH {
-                w: state.sizes.play_xywh.w,
+                w: state.ui.sizes.play_xywh.w,
                 h: small_section_h
             },
             kind: TextKind::UI,
@@ -493,13 +542,13 @@ pub fn update(
         commands.push(Text(TextSpec{
             text: format!(
                 "sizes: {:?}\nanimation_timer: {:?}",
-                state.sizes,
+                state.ui.sizes,
                 state.animation_timer
             ),
             xy: DrawXY { x: left_text_x, y },
             wh: DrawWH {
-                w: state.sizes.play_xywh.w,
-                h: state.sizes.play_xywh.h - y
+                w: state.ui.sizes.play_xywh.w,
+                h: state.ui.sizes.play_xywh.h - y
             },
             kind: TextKind::UI,
         }));
