@@ -104,7 +104,10 @@ mod raylib_rs_platform {
     use raylib::prelude::{
         *,
         KeyboardKey::*,
-        ffi::LoadImageFromMemory,
+        ffi::{
+            LoadImageFromMemory,
+            MouseButton::MOUSE_LEFT_BUTTON,
+        },
         core::{
             drawing::{RaylibTextureModeExt, RaylibShaderModeExt},
             logging
@@ -298,6 +301,10 @@ mod raylib_rs_platform {
                 input_flags |= app::INPUT_INTERACT_PRESSED;
             }
 
+            if rl.is_key_down(KEY_SPACE) || rl.is_key_down(KEY_ENTER) {
+                input_flags |= app::INPUT_INTERACT_DOWN;
+            }
+
             if rl.is_key_down(KEY_UP) || rl.is_key_down(KEY_W) {
                 input_flags |= app::INPUT_UP_DOWN;
             }
@@ -329,6 +336,14 @@ mod raylib_rs_platform {
             if rl.is_key_pressed(KEY_RIGHT) || rl.is_key_pressed(KEY_D) {
                 input_flags |= app::INPUT_RIGHT_PRESSED;
             }
+
+            if rl.is_mouse_button_pressed(MOUSE_LEFT_BUTTON) {
+                input_flags |= app::INPUT_LEFT_MOUSE_PRESSED;
+            }
+
+            if rl.is_mouse_button_down(MOUSE_LEFT_BUTTON) {
+                input_flags |= app::INPUT_LEFT_MOUSE_DOWN;
+            }            
 
             current_stats.input_gather.end = Instant::now();
             current_stats.update.start = current_stats.input_gather.end;

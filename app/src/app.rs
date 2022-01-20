@@ -74,6 +74,8 @@ impl Default for Dir {
 }
 
 mod tile {
+    use crate::{DrawX, DrawY};
+
     pub type Count = u32;
 
     pub type Coord = u8;
@@ -91,6 +93,30 @@ mod tile {
 
         pub fn saturating_sub_one(&self) -> Self {
             Self(self.0.saturating_sub(1))
+        }
+    }
+
+    type XError = ();
+
+    impl TryFrom<DrawX> for X {
+        type Error = XError;
+        fn try_from(draw_x: DrawX) -> Result<Self, Self::Error> {
+            if draw_x >= 0. && draw_x < (Self::MAX + 1) as DrawX {
+                Ok(Self(draw_x as Coord))
+            } else {
+                Err(())
+            }
+        }
+    }
+
+    impl TryFrom<Coord> for X {
+        type Error = XError;
+        fn try_from(coord: Coord) -> Result<Self, Self::Error> {
+            if coord <= Self::MAX {
+                Ok(Self(coord))
+            } else {
+                Err(())
+            }
         }
     }
 
@@ -113,6 +139,30 @@ mod tile {
 
         pub fn saturating_sub_one(&self) -> Self {
             Self(self.0.saturating_sub(1))
+        }
+    }
+
+    type YError = ();
+
+    impl TryFrom<DrawX> for Y {
+        type Error = YError;
+        fn try_from(draw_y: DrawY) -> Result<Self, Self::Error> {
+            if draw_y >= 0. && draw_y < (Self::MAX + 1) as DrawY {
+                Ok(Self(draw_y as Coord))
+            } else {
+                Err(())
+            }
+        }
+    }
+
+    impl TryFrom<Coord> for Y {
+        type Error = YError;
+        fn try_from(coord: Coord) -> Result<Self, Self::Error> {
+            if coord <= Self::MAX {
+                Ok(Self(coord))
+            } else {
+                Err(())
+            }
         }
     }
 
@@ -172,6 +222,19 @@ mod tile {
     fn to_coord_or_default(n: Count) -> Coord {
         core::convert::TryFrom::try_from(n).unwrap_or_default()
     }
+
+    #[cfg(test)]
+    fn all_xys() -> IntoIterator<Item = XY> {
+        let mut output = Vec::with_capacity();
+
+        for y in 0..Y::MAX {
+            for x in 0..X::MAX {
+                output.push(XY {x, y});
+            }
+        }
+
+        output
+    }
 }
 
 fn draw_xy_from_tile(sizes: &Sizes, txy: tile::XY) -> DrawXY {
@@ -180,6 +243,54 @@ fn draw_xy_from_tile(sizes: &Sizes, txy: tile::XY) -> DrawXY {
         y: sizes.board_xywh.y + sizes.board_xywh.h * (tile::Coord::from(txy.y) as DrawLength / tile::Y::COUNT as DrawLength),
     }
 }
+
+fn tile_xy_from_draw(sizes: &Sizes, dxy: DrawXY) -> Option<tile::XY> {
+    tile::X::try_from(((dxy.x - sizes.board_xywh.x) / sizes.board_xywh.w) * tile::X::COUNT as DrawLength)
+        .ok()
+        .and_then(|x| {
+            tile::Y::try_from(((dxy.y - sizes.board_xywh.y) / sizes.board_xywh.h) * tile::Y::COUNT as DrawLength)
+                .ok()
+                .map(|y| tile::XY {
+                    x,
+                    y,
+                })
+        })
+}
+
+#[test]
+fn all_the_tile_xys_round_trip_through_draw_xy() {
+    let sizes = draw::fresh_sizes(EXAMPLE_WH);
+
+    for txy in tile::all_xys() {
+        let round_tripped = tile_xy_from_draw(
+            &sizes,
+            draw_xy_from_tile(&sizes, txy)
+        ).unwrap();
+
+        assert_eq!(round_tripped, txy);
+    }
+}
+
+#[test]
+fn all_the_tile_xys_round_trip_through_draw_xy_when_offset_slightly() {
+    let sizes = draw::fresh_sizes(EXAMPLE_WH);
+
+    for txy in tile::all_xys() {
+        let mut draw_xy = draw_xy_from_tile(&sizes, txy);
+        draw_xy.x += sizes.tile_side_length / 8.;
+        draw_xy.y += sizes.tile_side_length / 8.;
+
+        let round_tripped = tile_xy_from_draw(
+            &sizes,
+            draw_xy,
+        ).unwrap();
+
+        assert_eq!(round_tripped, txy);
+    }
+}
+
+#[cfg(test)]
+const EXAMPLE_WH: DrawWH = DrawWH { x: 1366., y: 768. };
 
 mod cell {
     use crate::draw::SpriteKind;
@@ -194,8 +305,7 @@ mod cell {
     #[derive(Copy, Clone, Debug, Eq, PartialEq)]
     pub(crate) enum Status {
         Unchecked,
-        #[allow(unused)]
-        Checked
+        Checked,
     }
 
     impl Default for Status {
@@ -319,6 +429,10 @@ impl Ui {
             (true, ButtonState::Down) => UiState::Pressed,
         }
     }
+
+    fn cursor_tile_xy(&self) -> Option<tile::XY> {
+        tile_xy_from_draw(&self.sizes, self.cursor_xy)
+    }
 }
 
 #[derive(Debug, Default)]
@@ -357,6 +471,9 @@ pub const INPUT_LEFT_DOWN: InputFlags               = 0b0000_0000_0100_0000;
 pub const INPUT_RIGHT_DOWN: InputFlags              = 0b0000_0000_1000_0000;
 
 pub const INPUT_INTERACT_PRESSED: InputFlags        = 0b0000_0001_0000_0000;
+pub const INPUT_INTERACT_DOWN: InputFlags           = 0b0000_0010_0000_0000;
+pub const INPUT_LEFT_MOUSE_PRESSED: InputFlags      = 0b0000_0100_0000_0000;
+pub const INPUT_LEFT_MOUSE_DOWN: InputFlags         = 0b0000_1000_0000_0000;
 
 #[derive(Clone, Copy, Debug)]
 enum Input {
@@ -406,6 +523,15 @@ pub fn update(
         state.ui.sizes = draw::fresh_sizes(draw_wh);
     }
     state.ui.cursor_xy = cursor_xy;
+    let left_mouse_button_pressed = 
+        input_flags & INPUT_LEFT_MOUSE_PRESSED != 0;
+
+    state.ui.left_mouse_button =
+        if input_flags & INPUT_LEFT_MOUSE_DOWN != 0 {
+            ButtonState::Down
+        } else {
+            ButtonState::Up
+        };
 
     commands.clear();
 
@@ -497,6 +623,17 @@ pub fn update(
         Interact => {
             state.board.eye.state = SmallPupil;
         },
+    }
+
+    if left_mouse_button_pressed {
+        if let Some(txy) = state.ui.cursor_tile_xy() {
+            let i = tile::xy_to_i(txy);
+
+            state.board.tiles.tiles[i] = match state.board.tiles.tiles[i] {
+                TileData::Checked => TileData::Unchecked,
+                TileData::Unchecked => TileData::Checked,
+            };
+        }
     }
 
     for i in 0..TILES_LENGTH {
