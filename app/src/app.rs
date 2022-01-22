@@ -399,39 +399,72 @@ impl Default for ButtonState {
 
 pub type CursorXY = DrawXY;
 
+#[derive(Debug, Eq, PartialEq)]
+enum ClickArea {
+    TileXY(tile::XY),
+    // Labels,
+}
+
 #[derive(Debug, Default)]
 pub struct Ui {
     sizes: draw::Sizes,
     cursor_xy: CursorXY,
     left_mouse_button: ButtonState,
+    last_pressed: Option<ClickArea>,
 }
 
 impl Ui {
     fn tile_state(&self, txy: tile::XY) -> UiState {
-        let xy: DrawXY = draw_xy_from_tile(&self.sizes, txy);
-        let min_x = xy.x;
-        let min_y = xy.y;
-        let max_x = min_x + self.sizes.tile_side_length;
-        let max_y = min_y + self.sizes.tile_side_length;
-
-        // Use half-open ranges so the cells can abut each other, but no location
-        // is on two different cells. (TODO test this? Are we going to end up
-        // wanting fixed point here?)
-        let is_in_tile =
-            self.cursor_xy.x >= min_x
-            && self.cursor_xy.x < max_x
-            && self.cursor_xy.y >= min_y
-            && self.cursor_xy.y < max_y;
-
-        match (is_in_tile, self.left_mouse_button) {
-            (false, _) => UiState::Idle,
-            (true, ButtonState::Up) => UiState::Hover,
-            (true, ButtonState::Down) => UiState::Pressed,
+        use ClickArea::*;
+        match self.last_pressed {
+            Some(TileXY(last_txy)) => {
+                match (last_txy == txy, self.left_mouse_button) {
+                    (false, _)
+                    | (true, ButtonState::Up) => if self.is_hovered(TileXY(txy)) {
+                        UiState::Hover
+                    } else {
+                        UiState::Idle
+                    },
+                    (true, ButtonState::Down) => UiState::Pressed,
+                }
+            }
+            None => {
+                match (self.is_hovered(TileXY(txy)), self.left_mouse_button) {
+                    (false, _) => UiState::Idle,
+                    (true, ButtonState::Up) => UiState::Hover,
+                    (true, ButtonState::Down) => UiState::Pressed,
+                }
+            }
         }
     }
 
-    fn cursor_tile_xy(&self) -> Option<tile::XY> {
+    fn is_hovered(&self, area: ClickArea) -> bool {
+        use ClickArea::*;
+        match area {
+            TileXY(txy) => {
+                let xy: DrawXY = draw_xy_from_tile(&self.sizes, txy);
+                let min_x = xy.x;
+                let min_y = xy.y;
+                let max_x = min_x + self.sizes.tile_side_length;
+                let max_y = min_y + self.sizes.tile_side_length;
+
+                // Use half-open ranges so the cells can abut each other, but no location
+                // is on two different cells. (TODO test this? Are we going to end up
+                // wanting fixed point here?)
+                let is_in_tile =
+                    self.cursor_xy.x >= min_x
+                    && self.cursor_xy.x < max_x
+                    && self.cursor_xy.y >= min_y
+                    && self.cursor_xy.y < max_y;
+
+                is_in_tile
+            }
+        }
+    }
+
+    fn click_area(&self) -> Option<ClickArea> {
         tile_xy_from_draw(&self.sizes, self.cursor_xy)
+            .map(ClickArea::TileXY)
     }
 }
 
@@ -472,7 +505,9 @@ pub const INPUT_RIGHT_DOWN: InputFlags              = 0b0000_0000_1000_0000;
 
 pub const INPUT_INTERACT_PRESSED: InputFlags        = 0b0000_0001_0000_0000;
 pub const INPUT_INTERACT_DOWN: InputFlags           = 0b0000_0010_0000_0000;
-pub const INPUT_LEFT_MOUSE_PRESSED: InputFlags      = 0b0000_0100_0000_0000;
+
+/// Should be set if the mouse button was pressed or released this frame.
+pub const INPUT_LEFT_MOUSE_CHANGED: InputFlags      = 0b0000_0100_0000_0000;
 pub const INPUT_LEFT_MOUSE_DOWN: InputFlags         = 0b0000_1000_0000_0000;
 
 #[derive(Clone, Copy, Debug)]
@@ -523,11 +558,11 @@ pub fn update(
         state.ui.sizes = draw::fresh_sizes(draw_wh);
     }
     state.ui.cursor_xy = cursor_xy;
-    let left_mouse_button_pressed = 
-        input_flags & INPUT_LEFT_MOUSE_PRESSED != 0;
+
+    let left_mouse_button_down = input_flags & INPUT_LEFT_MOUSE_DOWN != 0;
 
     state.ui.left_mouse_button =
-        if input_flags & INPUT_LEFT_MOUSE_DOWN != 0 {
+        if left_mouse_button_down {
             ButtonState::Down
         } else {
             ButtonState::Up
@@ -625,14 +660,39 @@ pub fn update(
         },
     }
 
-    if left_mouse_button_pressed {
-        if let Some(txy) = state.ui.cursor_tile_xy() {
-            let i = tile::xy_to_i(txy);
+    let left_mouse_button_pressed =
+        input_flags & INPUT_LEFT_MOUSE_CHANGED != 0
+        && left_mouse_button_down;
+    let left_mouse_button_released =
+        input_flags & INPUT_LEFT_MOUSE_CHANGED != 0
+        && !left_mouse_button_down;
 
-            state.board.tiles.tiles[i] = match state.board.tiles.tiles[i] {
-                TileData::Checked => TileData::Unchecked,
-                TileData::Unchecked => TileData::Checked,
-            };
+    assert!(
+        !(left_mouse_button_pressed && left_mouse_button_released)
+    );
+
+    if left_mouse_button_pressed {
+        state.ui.last_pressed = state.ui.click_area();
+    }
+
+    if left_mouse_button_released {
+        if state.ui.click_area().is_some()
+        && state.ui.last_pressed == state.ui.click_area() {
+            match state.ui.last_pressed {
+                None => {
+                    panic!("unexpected last_pressed state");
+                },
+                Some(ClickArea::TileXY(txy)) => {
+                    let i = tile::xy_to_i(txy);
+
+                    state.board.tiles.tiles[i] = match state.board.tiles.tiles[i] {
+                        TileData::Checked => TileData::Unchecked,
+                        TileData::Unchecked => TileData::Checked,
+                    };
+                }
+            }
+        } else {
+            state.ui.last_pressed = None;
         }
     }
 

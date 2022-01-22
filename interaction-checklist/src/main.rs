@@ -75,7 +75,7 @@ fn source_spec(sprite: SpriteKind) -> SourceSpec {
         SmallPupilEye => 14.,
         Unchecked(Idle) | Checked(Idle) => 0.,
         Unchecked(Hover) | Checked(Hover) => 1.,
-        Unchecked(Pressed) | Checked(Pressed) => 1.,
+        Unchecked(Pressed) | Checked(Pressed) => 2.,
     };
 
     SourceSpec {
@@ -337,8 +337,9 @@ mod raylib_rs_platform {
                 input_flags |= app::INPUT_RIGHT_PRESSED;
             }
 
-            if rl.is_mouse_button_pressed(MOUSE_LEFT_BUTTON) {
-                input_flags |= app::INPUT_LEFT_MOUSE_PRESSED;
+            if rl.is_mouse_button_pressed(MOUSE_LEFT_BUTTON)
+            || rl.is_mouse_button_released(MOUSE_LEFT_BUTTON) {
+                input_flags |= app::INPUT_LEFT_MOUSE_CHANGED;
             }
 
             if rl.is_mouse_button_down(MOUSE_LEFT_BUTTON) {
