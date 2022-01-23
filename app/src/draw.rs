@@ -73,6 +73,26 @@ pub type TileCount = usize;
 pub type TileSideLength = DrawLength;
 
 #[derive(Clone, Debug, Default)]
+pub struct Rect {
+    pub min_x: DrawX,
+    pub min_y: DrawY,
+    pub max_x: DrawX,
+    pub max_y: DrawY,
+}
+
+impl Rect {
+    pub fn contains(&self, point: DrawXY) -> bool {
+        // Use half-open ranges so the rects can abut each other, but no
+        // location is in two different areas, unless the rects overlap.
+        // (TODO test this? Are we going to end up wanting fixed point here?)
+        point.x >= self.min_x
+        && point.x < self.max_x
+        && point.y >= self.min_y
+        && point.y < self.max_y
+    }
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct Sizes {
     pub draw_wh: DrawWH,
     pub play_xywh: PlayXYWH,

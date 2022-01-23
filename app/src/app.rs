@@ -80,11 +80,14 @@ mod tile {
 
     pub type Coord = u8;
 
+    pub(crate) const COORD_MAX: Coord = 0b1111;
+    pub(crate) const COORD_COUNT: Coord = COORD_MAX + 1;
+
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct X(Coord);
 
     impl X {
-        pub const MAX: Coord = 0b1111;
+        pub const MAX: Coord = COORD_MAX;
         pub const COUNT: Count = (X::MAX as Count) + 1;
 
         pub fn saturating_add_one(&self) -> Self {
@@ -130,7 +133,7 @@ mod tile {
     pub struct Y(Coord);
 
     impl Y {
-        pub const MAX: Coord = 0b1111;
+        pub const MAX: Coord = COORD_MAX;
         pub const COUNT: Count = (Y::MAX as Count) + 1;
 
         pub fn saturating_add_one(&self) -> Self {
@@ -224,12 +227,12 @@ mod tile {
     }
 
     #[cfg(test)]
-    fn all_xys() -> IntoIterator<Item = XY> {
-        let mut output = Vec::with_capacity();
+    pub fn all_xys() -> Vec<XY> {
+        let mut output = Vec::with_capacity(XY::COUNT as usize);
 
         for y in 0..Y::MAX {
             for x in 0..X::MAX {
-                output.push(XY {x, y});
+                output.push(XY {x: X(x), y: Y(y)});
             }
         }
 
@@ -289,8 +292,42 @@ fn all_the_tile_xys_round_trip_through_draw_xy_when_offset_slightly() {
     }
 }
 
+fn margin(sizes: &Sizes) -> DrawLength {
+    let smaller_side = if sizes.play_xywh.w < sizes.play_xywh.h {
+        sizes.play_xywh.w
+    } else {
+        // NaN ends up here.
+        sizes.play_xywh.h
+    };
+
+    smaller_side / 32.
+}
+
+fn label_wh(sizes: &Sizes) -> DrawWH {
+    let margin = margin(sizes);
+
+    DrawWH {
+        w: sizes.draw_wh.w / tile::X::MAX as DrawLength - margin,
+        h: sizes.draw_wh.h / tile::Y::MAX as DrawLength - margin,
+    }
+}
+
+fn top_label_rect(sizes: &Sizes) -> draw::Rect {
+    let margin = margin(sizes);
+    let label_wh = label_wh(sizes);
+
+    let zero_xy = draw_xy_from_tile(sizes, <_>::default());
+
+    draw::Rect {
+        min_x: zero_xy.x,
+        min_y: zero_xy.y - (label_wh.h + margin),
+        max_x: zero_xy.x + LABEL_COUNT as DrawX * (label_wh.w + margin) - margin,
+        max_y: zero_xy.y,
+    }
+}
+
 #[cfg(test)]
-const EXAMPLE_WH: DrawWH = DrawWH { x: 1366., y: 768. };
+const EXAMPLE_WH: DrawWH = DrawWH { w: 1366., h: 768. };
 
 mod cell {
     use crate::draw::SpriteKind;
@@ -402,14 +439,27 @@ pub type CursorXY = DrawXY;
 #[derive(Debug, Eq, PartialEq)]
 enum ClickArea {
     TileXY(tile::XY),
-    // Labels,
+    Labels,
+}
+
+#[derive(Debug)]
+enum UiMode {
+    Checking,
+    EditLabels,
+}
+
+impl Default for UiMode {
+    fn default() -> Self {
+        UiMode::Checking
+    }
 }
 
 #[derive(Debug, Default)]
 pub struct Ui {
+    mode: UiMode,
+    left_mouse_button: ButtonState,
     sizes: draw::Sizes,
     cursor_xy: CursorXY,
-    left_mouse_button: ButtonState,
     last_pressed: Option<ClickArea>,
 }
 
@@ -428,7 +478,7 @@ impl Ui {
                     (true, ButtonState::Down) => UiState::Pressed,
                 }
             }
-            None => {
+            None | Some(Labels) => {
                 match (self.is_hovered(TileXY(txy)), self.left_mouse_button) {
                     (false, _) => UiState::Idle,
                     (true, ButtonState::Up) => UiState::Hover,
@@ -440,37 +490,41 @@ impl Ui {
 
     fn is_hovered(&self, area: ClickArea) -> bool {
         use ClickArea::*;
-        match area {
+        let rect = match area {
             TileXY(txy) => {
                 let xy: DrawXY = draw_xy_from_tile(&self.sizes, txy);
-                let min_x = xy.x;
-                let min_y = xy.y;
-                let max_x = min_x + self.sizes.tile_side_length;
-                let max_y = min_y + self.sizes.tile_side_length;
 
-                // Use half-open ranges so the cells can abut each other, but no location
-                // is on two different cells. (TODO test this? Are we going to end up
-                // wanting fixed point here?)
-                let is_in_tile =
-                    self.cursor_xy.x >= min_x
-                    && self.cursor_xy.x < max_x
-                    && self.cursor_xy.y >= min_y
-                    && self.cursor_xy.y < max_y;
+                draw::Rect {
+                    min_x: xy.x,
+                    min_y: xy.y,
+                    max_x: xy.x + self.sizes.tile_side_length,
+                    max_y: xy.y + self.sizes.tile_side_length,
+                }
+            },
+            Labels => top_label_rect(&self.sizes),
+        };
 
-                is_in_tile
-            }
-        }
+        rect.contains(self.cursor_xy)
     }
 
     fn click_area(&self) -> Option<ClickArea> {
+        if top_label_rect(&self.sizes).contains(self.cursor_xy) {
+            return Some(ClickArea::Labels);
+        }
+
         tile_xy_from_draw(&self.sizes, self.cursor_xy)
             .map(ClickArea::TileXY)
     }
 }
 
+type Label = String;
+
+const LABEL_COUNT: usize = tile::COORD_COUNT as usize;
+
 #[derive(Debug, Default)]
 struct Board {
     tiles: Tiles,
+    labels: [Label; LABEL_COUNT],
     eye: Eye,
 }
 
@@ -578,88 +632,6 @@ pub fn update(
 
     const HOLD_FRAMES: AnimationTimer = 30;
 
-    match input {
-        NoChange => match state.board.eye.state {
-            Idle => {
-                if state.animation_timer % (HOLD_FRAMES * 3) == 0 {
-                    state.board.eye.state = NarrowAnimCenter;
-                }
-            },
-            Moved(_) => {
-                if state.animation_timer % HOLD_FRAMES == 0 {
-                    state.board.eye.state = Idle;
-                }
-            },
-            SmallPupil => {
-                if state.animation_timer % (HOLD_FRAMES * 3) == 0 {
-                    state.board.eye.state = Closed;
-                }
-            },
-            Closed => {
-                if state.animation_timer % (HOLD_FRAMES) == 0 {
-                    state.board.eye.state = HalfLid;
-                }
-            },
-            HalfLid => {
-                if state.animation_timer % (HOLD_FRAMES * 5) == 0 {
-                    state.board.eye.state = Idle;
-                }
-            },
-            NarrowAnimCenter => {
-                let modulus = state.animation_timer % (HOLD_FRAMES * 4);
-                if modulus == 0 {
-                    state.board.eye.state = NarrowAnimRight;
-                } else if modulus == HOLD_FRAMES * 2 {
-                    state.board.eye.state = NarrowAnimLeft;
-                }
-            },
-            NarrowAnimLeft | NarrowAnimRight => {
-                if state.animation_timer % HOLD_FRAMES == 0 {
-                    state.board.eye.state = NarrowAnimCenter;
-                }
-            },
-        },
-        Dir(Up) => {
-            state.board.eye.state = Moved(Up);
-            state.board.eye.xy.move_up();
-        },
-        Dir(UpRight) => {
-            state.board.eye.state = Moved(UpRight);
-            state.board.eye.xy.move_up();
-            state.board.eye.xy.move_right();
-        },
-        Dir(Right) => {
-            state.board.eye.state = Moved(Right);
-            state.board.eye.xy.move_right();
-        },
-        Dir(DownRight) => {
-            state.board.eye.state = Moved(DownRight);
-            state.board.eye.xy.move_down();
-            state.board.eye.xy.move_right();
-        },
-        Dir(Down) => {
-            state.board.eye.state = Moved(Down);
-            state.board.eye.xy.move_down();
-        },
-        Dir(DownLeft) => {
-            state.board.eye.state = Moved(DownLeft);
-            state.board.eye.xy.move_down();
-            state.board.eye.xy.move_left();
-        },
-        Dir(Left) => {
-            state.board.eye.state = Moved(Left);
-            state.board.eye.xy.x = state.board.eye.xy.x.saturating_sub_one();
-        },
-        Dir(UpLeft) => {
-            state.board.eye.state = Moved(UpLeft);
-            state.board.eye.xy.move_up();
-            state.board.eye.xy.move_left();
-        },
-        Interact => {
-            state.board.eye.state = SmallPupil;
-        },
-    }
-
     let left_mouse_button_pressed =
         input_flags & INPUT_LEFT_MOUSE_CHANGED != 0
         && left_mouse_button_down;
@@ -675,36 +647,180 @@ pub fn update(
         state.ui.last_pressed = state.ui.click_area();
     }
 
-    if left_mouse_button_released {
-        if state.ui.click_area().is_some()
-        && state.ui.last_pressed == state.ui.click_area() {
-            match state.ui.last_pressed {
-                None => {
-                    panic!("unexpected last_pressed state");
-                },
-                Some(ClickArea::TileXY(txy)) => {
-                    let i = tile::xy_to_i(txy);
-
-                    state.board.tiles.tiles[i] = match state.board.tiles.tiles[i] {
-                        TileData::Checked => TileData::Unchecked,
-                        TileData::Unchecked => TileData::Checked,
-                    };
+    macro_rules! on_clicked {
+        (| $click_area: ident | $code: block) => {
+            if left_mouse_button_released {
+                if state.ui.click_area().is_some()
+                && state.ui.last_pressed == state.ui.click_area() {
+                    match state.ui.last_pressed {
+                        None => {
+                            panic!("unexpected last_pressed state");
+                        },
+                        Some(ref $click_area) => {
+                            $code
+                        },
+                    }
+                } else {
+                    state.ui.last_pressed = None;
                 }
             }
-        } else {
-            state.ui.last_pressed = None;
         }
     }
 
-    for i in 0..TILES_LENGTH {
-        let tile_data = state.board.tiles.tiles[i];
+    match state.ui.mode {
+        UiMode::Checking => {
+            match input {
+                NoChange => match state.board.eye.state {
+                    Idle => {
+                        if state.animation_timer % (HOLD_FRAMES * 3) == 0 {
+                            state.board.eye.state = NarrowAnimCenter;
+                        }
+                    },
+                    Moved(_) => {
+                        if state.animation_timer % HOLD_FRAMES == 0 {
+                            state.board.eye.state = Idle;
+                        }
+                    },
+                    SmallPupil => {
+                        if state.animation_timer % (HOLD_FRAMES * 3) == 0 {
+                            state.board.eye.state = Closed;
+                        }
+                    },
+                    Closed => {
+                        if state.animation_timer % (HOLD_FRAMES) == 0 {
+                            state.board.eye.state = HalfLid;
+                        }
+                    },
+                    HalfLid => {
+                        if state.animation_timer % (HOLD_FRAMES * 5) == 0 {
+                            state.board.eye.state = Idle;
+                        }
+                    },
+                    NarrowAnimCenter => {
+                        let modulus = state.animation_timer % (HOLD_FRAMES * 4);
+                        if modulus == 0 {
+                            state.board.eye.state = NarrowAnimRight;
+                        } else if modulus == HOLD_FRAMES * 2 {
+                            state.board.eye.state = NarrowAnimLeft;
+                        }
+                    },
+                    NarrowAnimLeft | NarrowAnimRight => {
+                        if state.animation_timer % HOLD_FRAMES == 0 {
+                            state.board.eye.state = NarrowAnimCenter;
+                        }
+                    },
+                },
+                Dir(Up) => {
+                    state.board.eye.state = Moved(Up);
+                    state.board.eye.xy.move_up();
+                },
+                Dir(UpRight) => {
+                    state.board.eye.state = Moved(UpRight);
+                    state.board.eye.xy.move_up();
+                    state.board.eye.xy.move_right();
+                },
+                Dir(Right) => {
+                    state.board.eye.state = Moved(Right);
+                    state.board.eye.xy.move_right();
+                },
+                Dir(DownRight) => {
+                    state.board.eye.state = Moved(DownRight);
+                    state.board.eye.xy.move_down();
+                    state.board.eye.xy.move_right();
+                },
+                Dir(Down) => {
+                    state.board.eye.state = Moved(Down);
+                    state.board.eye.xy.move_down();
+                },
+                Dir(DownLeft) => {
+                    state.board.eye.state = Moved(DownLeft);
+                    state.board.eye.xy.move_down();
+                    state.board.eye.xy.move_left();
+                },
+                Dir(Left) => {
+                    state.board.eye.state = Moved(Left);
+                    state.board.eye.xy.x = state.board.eye.xy.x.saturating_sub_one();
+                },
+                Dir(UpLeft) => {
+                    state.board.eye.state = Moved(UpLeft);
+                    state.board.eye.xy.move_up();
+                    state.board.eye.xy.move_left();
+                },
+                Interact => {
+                    state.board.eye.state = SmallPupil;
+                },
+            }
 
-        let txy = tile::i_to_xy(i);
+            on_clicked!(
+                |area| {
+                    match *area {
+                        ClickArea::TileXY(txy) => {
+                            let i = tile::xy_to_i(txy);
+        
+                            state.board.tiles.tiles[i] = match state.board.tiles.tiles[i] {
+                                TileData::Checked => TileData::Unchecked,
+                                TileData::Unchecked => TileData::Checked,
+                            };
+                        },
+                        ClickArea::Labels => {
+                            state.ui.mode = UiMode::EditLabels;
+                        }
+                    }
+                }
+            );
+        },
+        UiMode::EditLabels => {
+            on_clicked!(
+                |area| {
+                    match area {
+                        ClickArea::TileXY(_) => {},
+                        ClickArea::Labels => {
+                            // Will probably want a close button instead.
+                            state.ui.mode = UiMode::Checking;
+                        }
+                    }
+                }
+            );
+            if left_mouse_button_released {
+                if state.ui.click_area().is_some()
+                && state.ui.last_pressed == state.ui.click_area() {
+                    match state.ui.last_pressed {
+                        None => {
+                            panic!("unexpected last_pressed state");
+                        },
+                        Some(ClickArea::TileXY(_)) => {},
+                        Some(ClickArea::Labels) => {
+                            // Will probably want a close button instead.
+                            state.ui.mode = UiMode::Checking;
+                        }
+                    }
+                } else {
+                    state.ui.last_pressed = None;
+                }
+            }
+            // TODO Allow editing labels.
+        }
+    }
 
-        commands.push(Sprite(SpriteSpec{
-            sprite: (tile_data.sprite_fn())(state.ui.tile_state(txy)),
-            xy: draw_xy_from_tile(&state.ui.sizes, txy),
-        }));
+    // TODO adjust where the tiles go, to leave room for labels inside play area
+    // TODO Draw the bounds of the label area, and make it react to hovering.
+    // TODO Draw left side labels
+    // TODO Hide the eye during label editing?
+
+    match state.ui.mode {
+        UiMode::Checking => {
+            for i in 0..TILES_LENGTH {
+                let tile_data = state.board.tiles.tiles[i];
+        
+                let txy = tile::i_to_xy(i);
+        
+                commands.push(Sprite(SpriteSpec{
+                    sprite: (tile_data.sprite_fn())(state.ui.tile_state(txy)),
+                    xy: draw_xy_from_tile(&state.ui.sizes, txy),
+                }));
+            }
+        },
+        UiMode::EditLabels => {/* no extra drawing in this layer yet */},
     }
 
     commands.push(Sprite(SpriteSpec{
@@ -712,13 +828,71 @@ pub fn update(
         xy: draw_xy_from_tile(&state.ui.sizes, state.board.eye.xy),
     }));
 
-    let left_text_x = state.ui.sizes.play_xywh.x + MARGIN;
-
-    const MARGIN: f32 = 16.;
-
-    let small_section_h = state.ui.sizes.draw_wh.h / 8. - MARGIN;
-
+    let margin = margin(&state.ui.sizes);
     {
+        let label_wh = label_wh(&state.ui.sizes);
+        let top_label_rect = top_label_rect(&state.ui.sizes);
+
+        let mut x = top_label_rect.min_x;
+        let y = top_label_rect.min_y;
+
+        for label in state.board.labels.iter() {
+            const MAX_COUNT: u8 = 8;
+            const ELLIPSIS: &str = "...";
+            const TRUNCATED_COUNT: usize = 5; // MAX_COUNT - ELLIPSIS.chars().count();
+    
+            let len = label.chars().count();
+    
+            commands.push(Text(TextSpec{
+                text: if len <= MAX_COUNT as usize {
+                    // TODO Copy-on-write in this case? Or store the truncated version
+                    // across frames?
+                    label.to_string()
+                } else {
+                    format!("{label:.TRUNCATED_COUNT$}{ELLIPSIS}")
+                },
+                xy: DrawXY { x, y },
+                wh: label_wh,
+                kind: TextKind::UI,
+            }));
+    
+            x += label_wh.w;
+        }
+    }
+
+    match state.ui.mode {
+        UiMode::Checking => {/* no extra drawing in this layer yet */},
+        UiMode::EditLabels => {
+            let mut y = margin;
+    
+            let left_text_x = state.ui.sizes.play_xywh.x + margin;
+
+            let small_section_h = state.ui.sizes.draw_wh.h / 8. - margin;
+
+            for (i, label) in state.board.labels.iter().enumerate() {
+                commands.push(Text(TextSpec{
+                    text: format!("{i}: {label}"),
+                    xy: DrawXY { x: left_text_x, y },
+                    wh: DrawWH {
+                        w: state.ui.sizes.play_xywh.w,
+                        h: small_section_h
+                    },
+                    kind: TextKind::UI,
+                }));
+        
+                y += small_section_h;
+            }
+        },
+    }
+
+    #[cfg(any())]
+    {
+        const MARGIN: f32 = 16.;
+
+        let left_text_x = state.ui.sizes.play_xywh.x + MARGIN;
+    
+        let small_section_h = state.ui.sizes.draw_wh.h / 8. - MARGIN;
+
         let mut y = MARGIN;
 
         commands.push(Text(TextSpec{
