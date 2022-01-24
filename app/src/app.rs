@@ -42,6 +42,13 @@ pub use draw::{
     SpriteSpec,
     Sizes,
 };
+use draw::{
+    draw_xy_from_tile,
+    tile_xy_from_draw,
+    margin,
+    label_wh,
+    top_label_rect,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArrowKind {
@@ -239,95 +246,6 @@ mod tile {
         output
     }
 }
-
-fn draw_xy_from_tile(sizes: &Sizes, txy: tile::XY) -> DrawXY {
-    DrawXY {
-        x: sizes.board_xywh.x + sizes.board_xywh.w * (tile::Coord::from(txy.x) as DrawLength / tile::X::COUNT as DrawLength),
-        y: sizes.board_xywh.y + sizes.board_xywh.h * (tile::Coord::from(txy.y) as DrawLength / tile::Y::COUNT as DrawLength),
-    }
-}
-
-fn tile_xy_from_draw(sizes: &Sizes, dxy: DrawXY) -> Option<tile::XY> {
-    tile::X::try_from(((dxy.x - sizes.board_xywh.x) / sizes.board_xywh.w) * tile::X::COUNT as DrawLength)
-        .ok()
-        .and_then(|x| {
-            tile::Y::try_from(((dxy.y - sizes.board_xywh.y) / sizes.board_xywh.h) * tile::Y::COUNT as DrawLength)
-                .ok()
-                .map(|y| tile::XY {
-                    x,
-                    y,
-                })
-        })
-}
-
-#[test]
-fn all_the_tile_xys_round_trip_through_draw_xy() {
-    let sizes = draw::fresh_sizes(EXAMPLE_WH);
-
-    for txy in tile::all_xys() {
-        let round_tripped = tile_xy_from_draw(
-            &sizes,
-            draw_xy_from_tile(&sizes, txy)
-        ).unwrap();
-
-        assert_eq!(round_tripped, txy);
-    }
-}
-
-#[test]
-fn all_the_tile_xys_round_trip_through_draw_xy_when_offset_slightly() {
-    let sizes = draw::fresh_sizes(EXAMPLE_WH);
-
-    for txy in tile::all_xys() {
-        let mut draw_xy = draw_xy_from_tile(&sizes, txy);
-        draw_xy.x += sizes.tile_side_length / 8.;
-        draw_xy.y += sizes.tile_side_length / 8.;
-
-        let round_tripped = tile_xy_from_draw(
-            &sizes,
-            draw_xy,
-        ).unwrap();
-
-        assert_eq!(round_tripped, txy);
-    }
-}
-
-fn margin(sizes: &Sizes) -> DrawLength {
-    let smaller_side = if sizes.play_xywh.w < sizes.play_xywh.h {
-        sizes.play_xywh.w
-    } else {
-        // NaN ends up here.
-        sizes.play_xywh.h
-    };
-
-    smaller_side / 32.
-}
-
-fn label_wh(sizes: &Sizes) -> DrawWH {
-    let margin = margin(sizes);
-
-    DrawWH {
-        w: sizes.draw_wh.w / tile::X::MAX as DrawLength - margin,
-        h: sizes.draw_wh.h / tile::Y::MAX as DrawLength - margin,
-    }
-}
-
-fn top_label_rect(sizes: &Sizes) -> draw::Rect {
-    let margin = margin(sizes);
-    let label_wh = label_wh(sizes);
-
-    let zero_xy = draw_xy_from_tile(sizes, <_>::default());
-
-    draw::Rect {
-        min_x: zero_xy.x,
-        min_y: zero_xy.y - (label_wh.h + margin),
-        max_x: zero_xy.x + LABEL_COUNT as DrawX * (label_wh.w + margin) - margin,
-        max_y: zero_xy.y,
-    }
-}
-
-#[cfg(test)]
-const EXAMPLE_WH: DrawWH = DrawWH { w: 1366., h: 768. };
 
 mod cell {
     use crate::draw::SpriteKind;
@@ -785,7 +703,6 @@ pub fn update(
         }
     }
 
-    // TODO adjust where the tiles go, to leave room for labels inside play area
     // TODO Draw the bounds of the label area, and make it react to hovering.
     // TODO Draw left side labels
     // TODO Hide the eye during label editing?
@@ -818,6 +735,11 @@ pub fn update(
 
         let mut x = top_label_rect.min_x;
         let y = top_label_rect.min_y;
+
+        commands.push(Sprite(SpriteSpec{
+            sprite: SpriteKind::Arrow(<_>::default(), <_>::default()),
+            xy: DrawXY { x: top_label_rect.min_x, y: top_label_rect.min_y, },
+        }));
 
         for label in state.board.labels.iter() {
             const MAX_COUNT: u8 = 8;
