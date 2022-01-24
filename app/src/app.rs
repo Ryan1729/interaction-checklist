@@ -781,23 +781,6 @@ pub fn update(
                     }
                 }
             );
-            if left_mouse_button_released {
-                if state.ui.click_area().is_some()
-                && state.ui.last_pressed == state.ui.click_area() {
-                    match state.ui.last_pressed {
-                        None => {
-                            panic!("unexpected last_pressed state");
-                        },
-                        Some(ClickArea::TileXY(_)) => {},
-                        Some(ClickArea::Labels) => {
-                            // Will probably want a close button instead.
-                            state.ui.mode = UiMode::Checking;
-                        }
-                    }
-                } else {
-                    state.ui.last_pressed = None;
-                }
-            }
             // TODO Allow editing labels.
         }
     }
