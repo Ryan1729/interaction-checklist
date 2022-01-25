@@ -33,7 +33,7 @@ fn source_spec(sprite: SpriteKind) -> SourceSpec {
     use ArrowKind::*;
     use Dir::*;
     use SpriteKind::*;
-    use app::UiState::*;
+    use app::{UiState::*, NineSlice as NS, NineSliceKind::*};
 
     let sx = match sprite {
         NeutralEye
@@ -47,6 +47,30 @@ fn source_spec(sprite: SpriteKind) -> SourceSpec {
         Arrow(_, Green)| DirEye(_) => 1.,
         Unchecked(_) => 2.,
         Checked(_) => 3.,
+        NineSlice(
+            NS::UpperLeft | NS::Left | NS::LowerLeft,
+            WhiteEdge
+        ) => 2.,
+        NineSlice(
+            NS::Upper | NS::NoEdges | NS::Lower,
+            WhiteEdge
+        ) => 3.,
+        NineSlice(
+            NS::UpperRight | NS::Right | NS::LowerRight,
+            WhiteEdge
+        ) => 4.,
+        NineSlice(
+            NS::UpperLeft | NS::Left | NS::LowerLeft,
+            YellowEdge
+        ) => 5.,
+        NineSlice(
+            NS::Upper | NS::NoEdges | NS::Lower,
+            YellowEdge
+        ) => 6.,
+        NineSlice(
+            NS::UpperRight | NS::Right | NS::LowerRight,
+            YellowEdge
+        ) => 7.,
     };
 
     let sy = match sprite {
@@ -76,6 +100,18 @@ fn source_spec(sprite: SpriteKind) -> SourceSpec {
         Unchecked(Idle) | Checked(Idle) => 0.,
         Unchecked(Hover) | Checked(Hover) => 1.,
         Unchecked(Pressed) | Checked(Pressed) => 2.,
+        NineSlice(
+            NS::UpperLeft | NS::Upper | NS::UpperRight,
+            _
+        ) => 4.,
+        NineSlice(
+            NS::Left | NS::NoEdges | NS::Right,
+            _
+        ) => 5.,
+        NineSlice(
+            NS::LowerLeft | NS::Lower | NS::LowerRight,
+            _
+        ) => 6.,
     };
 
     SourceSpec {

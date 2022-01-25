@@ -63,6 +63,31 @@ impl Default for ArrowKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NineSlice {
+    UpperLeft,
+    Upper,
+    UpperRight,
+    Left,
+    NoEdges,
+    Right,
+    LowerLeft,
+    Lower,
+    LowerRight,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NineSliceKind {
+    WhiteEdge,
+    YellowEdge
+}
+
+impl Default for NineSliceKind {
+    fn default() -> Self {
+        Self::WhiteEdge
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Dir {
     Up,
     UpRight,
@@ -703,8 +728,9 @@ pub fn update(
         }
     }
 
-    // TODO Draw the bounds of the label area, and make it react to hovering.
     // TODO Draw left side labels
+    // TODO Draw the bounds of the left side label area, and make it react to 
+    // hovering.
     // TODO Hide the eye during label editing?
 
     match state.ui.mode {
@@ -736,12 +762,29 @@ pub fn update(
         let mut x = top_label_rect.min_x;
         let y = top_label_rect.min_y;
 
-        commands.push(Sprite(SpriteSpec{
-            sprite: SpriteKind::Arrow(<_>::default(), <_>::default()),
-            xy: DrawXY { x: top_label_rect.min_x, y: top_label_rect.min_y, },
-        }));
+        let slice_kind = if top_label_rect.contains(state.ui.cursor_xy) {
+            NineSliceKind::YellowEdge
+        } else {
+            NineSliceKind::WhiteEdge
+        };
 
-        for label in state.board.labels.iter() {
+        for (i, label) in state.board.labels.iter().enumerate() {
+            // background
+            let slice = if i == 0 {
+                NineSlice::UpperLeft
+            } else if i == state.board.labels.len() - 1 {
+                NineSlice::UpperRight
+            } else {
+                NineSlice::Upper
+            };
+
+            commands.push(Sprite(SpriteSpec{
+                sprite: SpriteKind::NineSlice(slice, slice_kind),
+                xy: DrawXY { x, y },
+            }));
+
+
+            // text
             const MAX_COUNT: u8 = 8;
             const ELLIPSIS: &str = "...";
             const TRUNCATED_COUNT: usize = 5; // MAX_COUNT - ELLIPSIS.chars().count();

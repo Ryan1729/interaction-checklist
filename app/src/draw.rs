@@ -182,13 +182,12 @@ pub(crate) fn margin(sizes: &Sizes) -> DrawLength {
 
 pub(crate) fn label_wh(sizes: &Sizes) -> DrawWH {
     DrawWH {
-        w: sizes.tile_side_length * BOARD_W_TILES as DrawLength,
+        w: sizes.tile_side_length,
         h: sizes.tile_side_length,
     }
 }
 
 pub(crate) fn top_label_rect(sizes: &Sizes) -> Rect {
-    let margin = margin(sizes);
     let label_wh = label_wh(sizes);
 
     let zero_xy = draw_xy_from_tile(sizes, <_>::default());
@@ -196,7 +195,7 @@ pub(crate) fn top_label_rect(sizes: &Sizes) -> Rect {
     Rect {
         min_x: zero_xy.x,
         min_y: zero_xy.y - label_wh.h,
-        max_x: zero_xy.x + crate::LABEL_COUNT as DrawX * (label_wh.w + margin) - margin,
+        max_x: zero_xy.x + crate::LABEL_COUNT as DrawX * label_wh.w,
         max_y: zero_xy.y,
     }
 }
@@ -259,7 +258,7 @@ fn all_the_tile_xys_round_trip_through_draw_xy_when_offset_slightly() {
 #[cfg(test)]
 const EXAMPLE_WH: DrawWH = DrawWH { w: 1366., h: 768. };
 
-use crate::{cell::UiState, ArrowKind, Dir};
+use crate::{cell::UiState, ArrowKind, Dir, NineSlice, NineSliceKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpriteKind {
@@ -274,6 +273,7 @@ pub enum SpriteKind {
     HalfLidEye,
     Unchecked(UiState),
     Checked(UiState),
+    NineSlice(NineSlice, NineSliceKind),
 }
 
 impl Default for SpriteKind {
