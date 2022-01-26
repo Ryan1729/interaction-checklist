@@ -729,8 +729,6 @@ pub fn update(
         }
     }
 
-    // TODO Hide the eye during label editing?
-
     match state.ui.mode {
         UiMode::Checking => {
             for i in 0..TILES_LENGTH {
@@ -743,14 +741,16 @@ pub fn update(
                     xy: draw_xy_from_tile(&state.ui.sizes, txy),
                 }));
             }
-        },
-        UiMode::EditLabels => {/* no extra drawing in this layer yet */},
-    }
 
-    commands.push(Sprite(SpriteSpec{
-        sprite: state.board.eye.state.sprite(),
-        xy: draw_xy_from_tile(&state.ui.sizes, state.board.eye.xy),
-    }));
+            commands.push(Sprite(SpriteSpec{
+                sprite: state.board.eye.state.sprite(),
+                xy: draw_xy_from_tile(&state.ui.sizes, state.board.eye.xy),
+            }));
+        },
+        UiMode::EditLabels => {
+            state.board.eye.state = Idle;
+        },
+    }
 
     let margin = margin(&state.ui.sizes);
     {
