@@ -48,6 +48,7 @@ use draw::{
     margin,
     label_wh,
     top_label_rect,
+    left_label_rect,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -699,7 +700,7 @@ pub fn update(
                     match *area {
                         ClickArea::TileXY(txy) => {
                             let i = tile::xy_to_i(txy);
-        
+
                             state.board.tiles.tiles[i] = match state.board.tiles.tiles[i] {
                                 TileData::Checked => TileData::Unchecked,
                                 TileData::Unchecked => TileData::Checked,
@@ -728,18 +729,15 @@ pub fn update(
         }
     }
 
-    // TODO Draw left side labels
-    // TODO Draw the bounds of the left side label area, and make it react to 
-    // hovering.
     // TODO Hide the eye during label editing?
 
     match state.ui.mode {
         UiMode::Checking => {
             for i in 0..TILES_LENGTH {
                 let tile_data = state.board.tiles.tiles[i];
-        
+
                 let txy = tile::i_to_xy(i);
-        
+
                 commands.push(Sprite(SpriteSpec{
                     sprite: (tile_data.sprite_fn())(state.ui.tile_state(txy)),
                     xy: draw_xy_from_tile(&state.ui.sizes, txy),
@@ -758,11 +756,17 @@ pub fn update(
     {
         let label_wh = label_wh(&state.ui.sizes);
         let top_label_rect = top_label_rect(&state.ui.sizes);
+        let left_label_rect = left_label_rect(&state.ui.sizes);
 
-        let mut x = top_label_rect.min_x;
-        let y = top_label_rect.min_y;
+        let mut top_x = top_label_rect.min_x;
+        let top_y = top_label_rect.min_y;
 
-        let slice_kind = if top_label_rect.contains(state.ui.cursor_xy) {
+        let left_x = left_label_rect.min_x;
+        let mut left_y = left_label_rect.min_y;
+
+        let slice_kind = if
+            top_label_rect.contains(state.ui.cursor_xy)
+            || left_label_rect.contains(state.ui.cursor_xy) {
             NineSliceKind::YellowEdge
         } else {
             NineSliceKind::WhiteEdge
@@ -770,17 +774,29 @@ pub fn update(
 
         for (i, label) in state.board.labels.iter().enumerate() {
             // background
-            let slice = if i == 0 {
+            let top_slice = if i == 0 {
                 NineSlice::UpperLeft
             } else if i == state.board.labels.len() - 1 {
                 NineSlice::UpperRight
             } else {
                 NineSlice::Upper
             };
+            let left_slice = if i == 0 {
+                NineSlice::UpperLeft
+            } else if i == state.board.labels.len() - 1 {
+                NineSlice::LowerLeft
+            } else {
+                NineSlice::Left
+            };
 
             commands.push(Sprite(SpriteSpec{
-                sprite: SpriteKind::NineSlice(slice, slice_kind),
-                xy: DrawXY { x, y },
+                sprite: SpriteKind::NineSlice(top_slice, slice_kind),
+                xy: DrawXY { x: top_x, y: top_y },
+            }));
+
+            commands.push(Sprite(SpriteSpec{
+                sprite: SpriteKind::NineSlice(left_slice, slice_kind),
+                xy: DrawXY { x: left_x, y: left_y },
             }));
 
 
@@ -788,10 +804,10 @@ pub fn update(
             const MAX_COUNT: u8 = 8;
             const ELLIPSIS: &str = "...";
             const TRUNCATED_COUNT: usize = 5; // MAX_COUNT - ELLIPSIS.chars().count();
-    
+
             let len = label.chars().count();
-    
-            commands.push(Text(TextSpec{
+
+            let top_text_spec = TextSpec {
                 text: if len <= MAX_COUNT as usize {
                     // TODO Copy-on-write in this case? Or store the truncated version
                     // across frames?
@@ -799,12 +815,19 @@ pub fn update(
                 } else {
                     format!("{label:.TRUNCATED_COUNT$}{ELLIPSIS}")
                 },
-                xy: DrawXY { x, y },
+                xy: DrawXY { x: top_x, y: top_y },
                 wh: label_wh,
                 kind: TextKind::UI,
+            };
+
+            commands.push(Text(top_text_spec.clone()));
+            commands.push(Text(TextSpec {
+                xy: DrawXY { x: left_x, y: left_y },
+                ..top_text_spec
             }));
-    
-            x += label_wh.w;
+
+            top_x += label_wh.w;
+            left_y += label_wh.h;
         }
     }
 
@@ -812,7 +835,7 @@ pub fn update(
         UiMode::Checking => {/* no extra drawing in this layer yet */},
         UiMode::EditLabels => {
             let mut y = margin;
-    
+
             let left_text_x = state.ui.sizes.play_xywh.x + margin;
 
             let small_section_h = state.ui.sizes.draw_wh.h / 8. - margin;
@@ -827,7 +850,7 @@ pub fn update(
                     },
                     kind: TextKind::UI,
                 }));
-        
+
                 y += small_section_h;
             }
         },
@@ -838,7 +861,7 @@ pub fn update(
         const MARGIN: f32 = 16.;
 
         let left_text_x = state.ui.sizes.play_xywh.x + MARGIN;
-    
+
         let small_section_h = state.ui.sizes.draw_wh.h / 8. - MARGIN;
 
         let mut y = MARGIN;

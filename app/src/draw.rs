@@ -200,6 +200,19 @@ pub(crate) fn top_label_rect(sizes: &Sizes) -> Rect {
     }
 }
 
+pub(crate) fn left_label_rect(sizes: &Sizes) -> Rect {
+    let label_wh = label_wh(sizes);
+
+    let zero_xy = draw_xy_from_tile(sizes, <_>::default());
+
+    Rect {
+        min_x: zero_xy.x - label_wh.h,
+        min_y: zero_xy.y,
+        max_x: zero_xy.x + label_wh.h,
+        max_y: zero_xy.y + crate::LABEL_COUNT as DrawY * label_wh.h,
+    }
+}
+
 pub(crate) fn draw_xy_from_tile(sizes: &Sizes, txy: tile::XY) -> DrawXY {
     let w_frac = tile::Coord::from(txy.x) as DrawLength / BOARD_W_TILES as DrawLength;
     let h_frac = tile::Coord::from(txy.y) as DrawLength / BOARD_H_TILES as DrawLength;
@@ -295,12 +308,12 @@ pub struct SpriteSpec {
 }
 
 /// This is provided to make font selection etc. easier for platform layers.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum TextKind {
     UI,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TextSpec {
     pub text: StrBuf,
     pub xy: DrawXY,
