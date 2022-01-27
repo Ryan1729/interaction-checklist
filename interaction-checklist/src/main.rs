@@ -33,7 +33,7 @@ fn source_spec(sprite: SpriteKind) -> SourceSpec {
     use ArrowKind::*;
     use Dir::*;
     use SpriteKind::*;
-    use app::{UiState::*, NineSlice as NS, NineSliceKind::*};
+    use app::{UiState::*, LRThreeSlice as LRTS, NineSlice as NS, BorderKind::*};
 
     let sx = match sprite {
         NeutralEye
@@ -71,6 +71,12 @@ fn source_spec(sprite: SpriteKind) -> SourceSpec {
             NS::UpperRight | NS::Right | NS::LowerRight,
             YellowEdge
         ) => 7.,
+        LRThreeSlice(LRTS::Left, WhiteEdge) => 2.,
+        LRThreeSlice(LRTS::Center, WhiteEdge) => 3.,
+        LRThreeSlice(LRTS::Right, WhiteEdge) => 4.,
+        LRThreeSlice(LRTS::Left, YellowEdge) => 5.,
+        LRThreeSlice(LRTS::Center, YellowEdge) => 6.,
+        LRThreeSlice(LRTS::Right, YellowEdge) => 7.,
     };
 
     let sy = match sprite {
@@ -112,6 +118,7 @@ fn source_spec(sprite: SpriteKind) -> SourceSpec {
             NS::LowerLeft | NS::Lower | NS::LowerRight,
             _
         ) => 6.,
+        LRThreeSlice(_, _) => 7.,
     };
 
     SourceSpec {
@@ -380,7 +387,7 @@ mod raylib_rs_platform {
 
             if rl.is_mouse_button_down(MOUSE_LEFT_BUTTON) {
                 input_flags |= app::INPUT_LEFT_MOUSE_DOWN;
-            }            
+            }
 
             current_stats.input_gather.end = Instant::now();
             current_stats.update.start = current_stats.input_gather.end;
@@ -485,7 +492,7 @@ mod raylib_rs_platform {
                         Text(t) => {
                             use app::draw::TextKind;
                             match t.kind {
-                                TextKind::UI => {
+                                TextKind::UI | TextKind::OneTile => {
                                     shader_d.draw_text_rec(
                                         &font,
                                         &t.text,

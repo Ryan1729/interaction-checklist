@@ -45,10 +45,10 @@ pub use draw::{
 use draw::{
     draw_xy_from_tile,
     tile_xy_from_draw,
-    margin,
     label_wh,
     top_label_rect,
     left_label_rect,
+    zero_tile_xy,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,6 +61,13 @@ impl Default for ArrowKind {
     fn default() -> Self {
         Self::Red
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LRThreeSlice {
+    Left,
+    Center,
+    Right,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -77,12 +84,12 @@ pub enum NineSlice {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NineSliceKind {
+pub enum BorderKind {
     WhiteEdge,
     YellowEdge
 }
 
-impl Default for NineSliceKind {
+impl Default for BorderKind {
     fn default() -> Self {
         Self::WhiteEdge
     }
@@ -726,15 +733,14 @@ pub fn update(
                 }
             );
             // TODO Allow editing labels.
-            //   * draw N text boxes with NineSlice
             //   * Allow clicking on the text boxes to select them
             //       * respond to hover: yellow outline
-            //       * when selected: 
+            //       * when selected:
             //          * red outline
             //          * draw cursor
             //   * When a box is selected, capture text input and add characters
             //     to string. (I guess pass an array of chars as a possible input
-            //     since we could get multiple chars per frame? 8 chars is 
+            //     since we could get multiple chars per frame? 8 chars is
             //     probably enough.)
         }
     }
@@ -762,7 +768,7 @@ pub fn update(
         },
     }
 
-    let margin = margin(&state.ui.sizes);
+    // Drawing labelled edges
     {
         let label_wh = label_wh(&state.ui.sizes);
         let top_label_rect = top_label_rect(&state.ui.sizes);
@@ -777,9 +783,9 @@ pub fn update(
         let slice_kind = if
             top_label_rect.contains(state.ui.cursor_xy)
             || left_label_rect.contains(state.ui.cursor_xy) {
-            NineSliceKind::YellowEdge
+            BorderKind::YellowEdge
         } else {
-            NineSliceKind::WhiteEdge
+            BorderKind::WhiteEdge
         };
 
         for (i, label) in state.board.labels.iter().enumerate() {
@@ -844,24 +850,76 @@ pub fn update(
     match state.ui.mode {
         UiMode::Checking => {/* no extra drawing in this layer yet */},
         UiMode::EditLabels => {
-            let mut y = margin;
+            let zero_xy = zero_tile_xy(&state.ui.sizes);
+            let x = zero_xy.x;
+            let mut y = zero_xy.y;
 
-            let left_text_x = state.ui.sizes.play_xywh.x + margin;
+            let tile_side_length = state.ui.sizes.tile_side_length;
+            let section_h = tile_side_length;
+            let number_w = tile_side_length;
 
-            let small_section_h = state.ui.sizes.draw_wh.h / 8. - margin;
+            let label_x = x + number_w;
 
             for (i, label) in state.board.labels.iter().enumerate() {
                 commands.push(Text(TextSpec{
-                    text: format!("{i}: {label}"),
-                    xy: DrawXY { x: left_text_x, y },
+                    text: format!("{i}:"), // TODO could make n static strs
+                    xy: DrawXY { x, y },
                     wh: DrawWH {
-                        w: state.ui.sizes.play_xywh.w,
-                        h: small_section_h
+                        w: state.ui.sizes.board_xywh.w,
+                        h: section_h
                     },
-                    kind: TextKind::UI,
+                    kind: TextKind::OneTile,
                 }));
 
-                y += small_section_h;
+                const TEXT_BOX_W_TILES: u8 = 15;
+
+                let text_box_rect = draw::Rect {
+                    min_x: label_x,
+                    min_y: y,
+                    max_x: label_x
+                           + TEXT_BOX_W_TILES as DrawLength * tile_side_length,
+                    max_y: y + tile_side_length,
+                };
+
+                let border_kind = if
+                    text_box_rect.contains(state.ui.cursor_xy) {
+                    BorderKind::YellowEdge
+                } else {
+                    BorderKind::WhiteEdge
+                };
+
+                for i in 0..TEXT_BOX_W_TILES {
+                    let three_slice = if i == 0 {
+                        LRThreeSlice::Left
+                    } else if i == TEXT_BOX_W_TILES - 1 {
+                        LRThreeSlice::Right
+                    } else {
+                        LRThreeSlice::Center
+                    };
+
+                    commands.push(Sprite(SpriteSpec{
+                        sprite: SpriteKind::LRThreeSlice(
+                            three_slice,
+                            border_kind
+                        ),
+                        xy: DrawXY {
+                            x: label_x + i as DrawLength * tile_side_length,
+                            y
+                        },
+                    }));
+                }
+
+                commands.push(Text(TextSpec{
+                    text: label.to_string(), // TODO Copy-on-write in this case?
+                    xy: DrawXY { x: label_x, y },
+                    wh: DrawWH {
+                        w: state.ui.sizes.board_xywh.w,
+                        h: section_h
+                    },
+                    kind: TextKind::OneTile,
+                }));
+
+                y += section_h;
             }
         },
     }

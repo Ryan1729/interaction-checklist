@@ -117,8 +117,8 @@ const TOP_LABELS_HEIGHT_TILES: TileCount = 1;
 const CENTER_UI_HEIGHT_TILES: TileCount = CENTER_UI_WIDTH_TILES + TOP_LABELS_HEIGHT_TILES;
 const NON_BOARD_H_TILES: TileCount = CENTER_UI_HEIGHT_TILES - BOARD_H_TILES;
 
-const DRAW_WIDTH_TILES: TileCount = LEFT_UI_WIDTH_TILES 
-    + CENTER_UI_WIDTH_TILES 
+const DRAW_WIDTH_TILES: TileCount = LEFT_UI_WIDTH_TILES
+    + CENTER_UI_WIDTH_TILES
     + RIGHT_UI_WIDTH_TILES;
 
 pub fn fresh_sizes(wh: DrawWH) -> Sizes {
@@ -169,17 +169,6 @@ pub fn fresh_sizes(wh: DrawWH) -> Sizes {
     }
 }
 
-pub(crate) fn margin(sizes: &Sizes) -> DrawLength {
-    let smaller_side = if sizes.play_xywh.w < sizes.play_xywh.h {
-        sizes.play_xywh.w
-    } else {
-        // NaN ends up here.
-        sizes.play_xywh.h
-    };
-
-    smaller_side / 32.
-}
-
 pub(crate) fn label_wh(sizes: &Sizes) -> DrawWH {
     DrawWH {
         w: sizes.tile_side_length,
@@ -190,7 +179,7 @@ pub(crate) fn label_wh(sizes: &Sizes) -> DrawWH {
 pub(crate) fn top_label_rect(sizes: &Sizes) -> Rect {
     let label_wh = label_wh(sizes);
 
-    let zero_xy = draw_xy_from_tile(sizes, <_>::default());
+    let zero_xy = zero_tile_xy(sizes);
 
     Rect {
         min_x: zero_xy.x,
@@ -268,10 +257,14 @@ fn all_the_tile_xys_round_trip_through_draw_xy_when_offset_slightly() {
     }
 }
 
+pub(crate) fn zero_tile_xy(sizes: &Sizes) -> DrawXY {
+    draw_xy_from_tile(sizes, <_>::default())
+}
+
 #[cfg(test)]
 const EXAMPLE_WH: DrawWH = DrawWH { w: 1366., h: 768. };
 
-use crate::{cell::UiState, ArrowKind, Dir, NineSlice, NineSliceKind};
+use crate::{cell::UiState, ArrowKind, Dir, LRThreeSlice, NineSlice, BorderKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpriteKind {
@@ -286,7 +279,8 @@ pub enum SpriteKind {
     HalfLidEye,
     Unchecked(UiState),
     Checked(UiState),
-    NineSlice(NineSlice, NineSliceKind),
+    LRThreeSlice(LRThreeSlice, BorderKind),
+    NineSlice(NineSlice, BorderKind),
 }
 
 impl Default for SpriteKind {
@@ -311,6 +305,7 @@ pub struct SpriteSpec {
 #[derive(Clone, Copy, Debug)]
 pub enum TextKind {
     UI,
+    OneTile,
 }
 
 #[derive(Clone, Debug)]
