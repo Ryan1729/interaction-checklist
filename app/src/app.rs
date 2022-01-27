@@ -726,6 +726,16 @@ pub fn update(
                 }
             );
             // TODO Allow editing labels.
+            //   * draw N text boxes with NineSlice
+            //   * Allow clicking on the text boxes to select them
+            //       * respond to hover: yellow outline
+            //       * when selected: 
+            //          * red outline
+            //          * draw cursor
+            //   * When a box is selected, capture text input and add characters
+            //     to string. (I guess pass an array of chars as a possible input
+            //     since we could get multiple chars per frame? 8 chars is 
+            //     probably enough.)
         }
     }
 
