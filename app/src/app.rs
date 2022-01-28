@@ -550,6 +550,28 @@ impl Input {
     }
 }
 
+const TEXT_BOX_W_TILES: u8 = 15;
+
+fn text_box_rect(sizes: &Sizes, i: usize) -> draw::Rect {
+    let tile_side_length = sizes.tile_side_length;
+
+    let zero_xy = zero_tile_xy(sizes);
+    let x = zero_xy.x;
+    let y = zero_xy.y + i as DrawLength * tile_side_length;
+
+    let number_w = tile_side_length;
+
+    let label_x = x + number_w;
+
+    draw::Rect {
+        min_x: label_x,
+        min_y: y,
+        max_x: label_x
+               + TEXT_BOX_W_TILES as DrawLength * tile_side_length,
+        max_y: y + tile_side_length,
+    }
+}
+
 pub fn update(
     state: &mut State,
     commands: &mut dyn ClearableStorage<draw::Command>,
@@ -732,12 +754,23 @@ pub fn update(
                     }
                 }
             );
+
+            for (i, label) in state.board.labels.iter_mut().enumerate() {
+                let text_box_rect = text_box_rect(&state.ui.sizes, i);
+
+                if text_box_rect.contains(state.ui.cursor_xy) {
+                    // TODO replace this with real text input
+                    match input {
+                        Dir(Up) => { label.push('w'); },
+                        Dir(Left) => { label.push('a'); },
+                        Dir(Down) => { label.push('s'); },
+                        Dir(Right) => { label.push('d'); },
+                        Interact => { label.pop(); },
+                        _ => {}
+                    }
+                }
+            }
             // TODO Allow editing labels.
-            //   * Allow clicking on the text boxes to select them
-            //       * respond to hover: yellow outline
-            //       * when selected:
-            //          * red outline
-            //          * draw cursor
             //   * When a box is selected, capture text input and add characters
             //     to string. (I guess pass an array of chars as a possible input
             //     since we could get multiple chars per frame? 8 chars is
@@ -850,17 +883,16 @@ pub fn update(
     match state.ui.mode {
         UiMode::Checking => {/* no extra drawing in this layer yet */},
         UiMode::EditLabels => {
-            let zero_xy = zero_tile_xy(&state.ui.sizes);
-            let x = zero_xy.x;
-            let mut y = zero_xy.y;
-
             let tile_side_length = state.ui.sizes.tile_side_length;
             let section_h = tile_side_length;
-            let number_w = tile_side_length;
-
-            let label_x = x + number_w;
 
             for (i, label) in state.board.labels.iter().enumerate() {
+                let text_box_rect = text_box_rect(&state.ui.sizes, i);
+
+                let label_x = text_box_rect.min_x;
+                let x = label_x - state.ui.sizes.tile_side_length;
+                let y = text_box_rect.min_y;
+
                 commands.push(Text(TextSpec{
                     text: format!("{i}:"), // TODO could make n static strs
                     xy: DrawXY { x, y },
@@ -871,18 +903,9 @@ pub fn update(
                     kind: TextKind::OneTile,
                 }));
 
-                const TEXT_BOX_W_TILES: u8 = 15;
+                let is_hovered = text_box_rect.contains(state.ui.cursor_xy);
 
-                let text_box_rect = draw::Rect {
-                    min_x: label_x,
-                    min_y: y,
-                    max_x: label_x
-                           + TEXT_BOX_W_TILES as DrawLength * tile_side_length,
-                    max_y: y + tile_side_length,
-                };
-
-                let border_kind = if
-                    text_box_rect.contains(state.ui.cursor_xy) {
+                let border_kind = if is_hovered {
                     BorderKind::YellowEdge
                 } else {
                     BorderKind::WhiteEdge
@@ -909,17 +932,21 @@ pub fn update(
                     }));
                 }
 
-                commands.push(Text(TextSpec{
-                    text: label.to_string(), // TODO Copy-on-write in this case?
-                    xy: DrawXY { x: label_x, y },
-                    wh: DrawWH {
-                        w: state.ui.sizes.board_xywh.w,
-                        h: section_h
-                    },
-                    kind: TextKind::OneTile,
-                }));
-
-                y += section_h;
+                commands.push(Text(
+                    TextSpec{
+                        text: label.to_string(), // TODO Copy-on-write in this case?
+                        xy: DrawXY { x: label_x, y },
+                        wh: DrawWH {
+                            w: state.ui.sizes.board_xywh.w,
+                            h: section_h
+                        },
+                        kind: if is_hovered {
+                            TextKind::TextBoxWithCursor
+                        } else {
+                            TextKind::TextBox
+                        },
+                    }
+                ));
             }
         },
     }

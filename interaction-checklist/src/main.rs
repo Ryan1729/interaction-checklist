@@ -153,7 +153,8 @@ mod raylib_rs_platform {
         },
         core::{
             drawing::{RaylibTextureModeExt, RaylibShaderModeExt},
-            logging
+            logging,
+            text::measure_text,
         }
     };
 
@@ -285,6 +286,7 @@ mod raylib_rs_platform {
         const BACKGROUND: Color = Color{ r: 0x22, g: 0x22, b: 0x22, a: 255 };
         const WHITE: Color = Color{ r: 0xee, g: 0xee, b: 0xee, a: 255 };
         const TEXT: Color = WHITE;
+        const CURSOR: Color = Color{ r: 0xde, g: 0x49, b: 0x49, a: 255 };
         const NO_TINT: Color = WHITE;
         const OUTLINE: Color = WHITE;
 
@@ -490,25 +492,93 @@ mod raylib_rs_platform {
                             );
                         }
                         Text(t) => {
+                            macro_rules! draw_text {
+                                ($rect: expr, $size: expr $(,)?) => {
+                                    draw_text!($rect, $size, &t.text, TEXT);
+                                };
+                                ($rect: expr, $size: expr, $text: expr, $colour: expr $(,)?) => {
+                                    shader_d.draw_text_rec(
+                                        &font,
+                                        $text,
+                                        $rect,
+                                        $size,
+                                        1.,
+                                        true, // word_wrap
+                                        $colour,
+                                    );
+                                }
+                            }
+
                             use app::draw::TextKind;
                             match t.kind {
                                 TextKind::UI | TextKind::OneTile => {
-                                    shader_d.draw_text_rec(
-                                        &font,
-                                        &t.text,
+                                    draw_text!(
                                         Rectangle {
                                             x: t.xy.x,
                                             y: t.xy.y,
                                             width: t.wh.w,
                                             height: t.wh.h,
                                         },
-                                        // Constant arrived at through trial and error.
+                                        // Constant arrived at through trial 
+                                        // and error.
                                         sizes.draw_wh.w * (1./48.),
-                                        1.,
-                                        true, // word_wrap
-                                        TEXT
                                     );
                                 },
+                                TextKind::TextBox => {
+                                    draw_text!(
+                                        Rectangle {
+                                            x: t.xy.x + sizes.text_box_margin,
+                                            y: t.xy.y + sizes.text_box_margin,
+                                            width: t.wh.w - (2. * sizes.text_box_margin),
+                                            height: t.wh.h - (2. * sizes.text_box_margin),
+                                        },
+                                        // Constant arrived at through trial 
+                                        // and error.
+                                        sizes.draw_wh.w * (1./40.),
+                                    );
+                                },
+                                TextKind::TextBoxWithCursor => {
+                                    let rect = Rectangle {
+                                        x: t.xy.x + sizes.text_box_margin,
+                                        y: t.xy.y + sizes.text_box_margin,
+                                        width: t.wh.w - (2. * sizes.text_box_margin),
+                                        height: t.wh.h - (2. * sizes.text_box_margin),
+                                    };
+
+                                    // Constant arrived at through trial 
+                                    // and error.
+                                    let size = sizes.draw_wh.w * (1./40.);
+
+                                    draw_text!(
+                                        rect,
+                                        size,
+                                    );
+
+                                    let size_pixels = size.floor() as i32;
+
+                                    let measured_width = 
+                                        measure_text(&t.text, size_pixels)
+                                        as f32;
+
+                                    let width = measured_width
+                                    // No idea why it seems to be off by this amount
+                                    - (
+                                        t.text.chars().count() as f32
+                                        * 3.
+                                    )
+                                    + sizes.text_box_margin;
+
+                                    // TODO make this cursor blink
+                                    draw_text!(
+                                        Rectangle {
+                                            x: rect.x + width,
+                                            ..rect
+                                        },
+                                        size,
+                                        "_",
+                                        CURSOR,
+                                    );
+                                }
                             };
                         }
                     }

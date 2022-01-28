@@ -71,6 +71,7 @@ pub struct DrawWH {
 
 pub type TileCount = usize;
 pub type TileSideLength = DrawLength;
+pub type TextBoxMargin = DrawLength;
 
 #[derive(Clone, Debug, Default)]
 pub struct Rect {
@@ -98,6 +99,7 @@ pub struct Sizes {
     pub play_xywh: PlayXYWH,
     pub board_xywh: BoardXYWH,
     pub tile_side_length: TileSideLength,
+    pub text_box_margin: TextBoxMargin,
 }
 
 use crate::tile;
@@ -166,6 +168,7 @@ pub fn fresh_sizes(wh: DrawWH) -> Sizes {
             h: board_area_h,
         },
         tile_side_length,
+        text_box_margin: tile_side_length / 16.,
     }
 }
 
@@ -306,6 +309,8 @@ pub struct SpriteSpec {
 pub enum TextKind {
     UI,
     OneTile,
+    TextBox,
+    TextBoxWithCursor,
 }
 
 #[derive(Clone, Debug)]
