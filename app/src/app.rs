@@ -851,23 +851,11 @@ pub fn update(
 
 
             // text
-            const MAX_COUNT: u8 = 8;
-            const ELLIPSIS: &str = "...";
-            const TRUNCATED_COUNT: usize = 5; // MAX_COUNT - ELLIPSIS.chars().count();
-
-            let len = label.chars().count();
-
             let top_text_spec = TextSpec {
-                text: if len <= MAX_COUNT as usize {
-                    // TODO Copy-on-write in this case? Or store the truncated version
-                    // across frames?
-                    label.to_string()
-                } else {
-                    format!("{label:.TRUNCATED_COUNT$}{ELLIPSIS}")
-                },
+                text: label.to_string(),
                 xy: DrawXY { x: top_x, y: top_y },
                 wh: label_wh,
-                kind: TextKind::UI,
+                kind: TextKind::CellLabel,
             };
 
             commands.push(Text(top_text_spec.clone()));

@@ -168,7 +168,7 @@ pub fn fresh_sizes(wh: DrawWH) -> Sizes {
             h: board_area_h,
         },
         tile_side_length,
-        text_box_margin: tile_side_length / 16.,
+        text_box_margin: 3. * tile_side_length / 32.,
     }
 }
 
@@ -311,6 +311,7 @@ pub enum TextKind {
     OneTile,
     TextBox,
     TextBoxWithCursor,
+    CellLabel,
 }
 
 #[derive(Clone, Debug)]

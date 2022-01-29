@@ -546,9 +546,20 @@ mod raylib_rs_platform {
                                 }
                             }
 
+                            macro_rules! margin_rect {
+                                () => {{
+                                    Rectangle {
+                                        x: t.xy.x + sizes.text_box_margin,
+                                        y: t.xy.y + sizes.text_box_margin,
+                                        width: t.wh.w - (2. * sizes.text_box_margin),
+                                        height: t.wh.h - (2. * sizes.text_box_margin),
+                                    }
+                                }}
+                            }
+
                             use app::draw::TextKind;
                             match t.kind {
-                                TextKind::UI | TextKind::OneTile => {
+                                TextKind::UI => {
                                     draw_text!(
                                         Rectangle {
                                             x: t.xy.x,
@@ -561,30 +572,28 @@ mod raylib_rs_platform {
                                         sizes.draw_wh.w * (1./48.),
                                     );
                                 },
-                                TextKind::TextBox => {
+                                TextKind::OneTile => {
                                     draw_text!(
-                                        Rectangle {
-                                            x: t.xy.x + sizes.text_box_margin,
-                                            y: t.xy.y + sizes.text_box_margin,
-                                            width: t.wh.w - (2. * sizes.text_box_margin),
-                                            height: t.wh.h - (2. * sizes.text_box_margin),
-                                        },
+                                        margin_rect!(),
                                         // Constant arrived at through trial 
                                         // and error.
-                                        sizes.draw_wh.w * (1./40.),
+                                        sizes.draw_wh.w * (1./48.),
+                                    );
+                                },
+                                TextKind::TextBox => {
+                                    draw_text!(
+                                        margin_rect!(),
+                                        // Constant arrived at through trial 
+                                        // and error.
+                                        sizes.draw_wh.w * (1./48.),
                                     );
                                 },
                                 TextKind::TextBoxWithCursor => {
-                                    let rect = Rectangle {
-                                        x: t.xy.x + sizes.text_box_margin,
-                                        y: t.xy.y + sizes.text_box_margin,
-                                        width: t.wh.w - (2. * sizes.text_box_margin),
-                                        height: t.wh.h - (2. * sizes.text_box_margin),
-                                    };
+                                    let rect = margin_rect!();
 
                                     // Constant arrived at through trial 
                                     // and error.
-                                    let size = sizes.draw_wh.w * (1./40.);
+                                    let size = sizes.draw_wh.w * (1./48.);
 
                                     draw_text!(
                                         rect,
@@ -614,6 +623,14 @@ mod raylib_rs_platform {
                                         size,
                                         "_",
                                         CURSOR,
+                                    );
+                                },
+                                TextKind::CellLabel => {
+                                    draw_text!(
+                                        margin_rect!(),
+                                        // Constant arrived at through trial 
+                                        // and error.
+                                        sizes.draw_wh.w * (1./112.),
                                     );
                                 }
                             };
