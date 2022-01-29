@@ -572,10 +572,15 @@ fn text_box_rect(sizes: &Sizes, i: usize) -> draw::Rect {
     }
 }
 
+pub type AsciiByte = u8;
+
+pub type TextInput = [AsciiByte; 8];
+
 pub fn update(
     state: &mut State,
     commands: &mut dyn ClearableStorage<draw::Command>,
     input_flags: InputFlags,
+    text_input: TextInput,
     cursor_xy: CursorXY,
     draw_wh: DrawWH,
 ) {
@@ -759,22 +764,18 @@ pub fn update(
                 let text_box_rect = text_box_rect(&state.ui.sizes, i);
 
                 if text_box_rect.contains(state.ui.cursor_xy) {
-                    // TODO replace this with real text input
-                    match input {
-                        Dir(Up) => { label.push('w'); },
-                        Dir(Left) => { label.push('a'); },
-                        Dir(Down) => { label.push('s'); },
-                        Dir(Right) => { label.push('d'); },
-                        Interact => { label.pop(); },
-                        _ => {}
+                    for byte in text_input {
+                        match byte {
+                            0 => break,
+                            // backspace
+                            8
+                            // delete
+                            | 127 => { label.pop(); }
+                            _ => { label.push(byte as char); }
+                        }
                     }
                 }
             }
-            // TODO Allow editing labels.
-            //   * When a box is selected, capture text input and add characters
-            //     to string. (I guess pass an array of chars as a possible input
-            //     since we could get multiple chars per frame? 8 chars is
-            //     probably enough.)
         }
     }
 

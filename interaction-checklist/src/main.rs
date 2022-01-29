@@ -279,6 +279,7 @@ mod raylib_rs_platform {
             &mut state,
             &mut commands,
             0,
+            <_>::default(),
             get_cursor_xy!(),
             draw_wh(&rl),
         );
@@ -289,6 +290,8 @@ mod raylib_rs_platform {
         const CURSOR: Color = Color{ r: 0xde, g: 0x49, b: 0x49, a: 255 };
         const NO_TINT: Color = WHITE;
         const OUTLINE: Color = WHITE;
+
+        let mut backspace_repeat_timer = 0;
 
         let mut show_stats = false;
         use std::time::Instant;
@@ -338,6 +341,39 @@ mod raylib_rs_platform {
 
             if rl.is_key_pressed(KEY_F10) {
                 show_stats = !show_stats;
+            }
+
+            let mut text_input = app::TextInput::default();
+            {
+                let mut byte_index = 0;
+                let mut key = unsafe{ ffi::GetCharPressed() };
+
+                while key > 0 && byte_index < text_input.len() {
+                    dbg!(key);
+                    text_input[byte_index] = (key & 0xff) as u8;
+                    byte_index += 1;
+    
+                    // Check next character in the queue
+                    key = unsafe{ ffi::GetCharPressed() };
+                }
+
+
+                const KEY_REPEAT_FRAMES: u8 = 8;
+                if backspace_repeat_timer < KEY_REPEAT_FRAMES {
+                    backspace_repeat_timer += 1;
+                }
+
+                if rl.is_key_pressed(KEY_BACKSPACE)
+                || (
+                    rl.is_key_down(KEY_BACKSPACE)
+                    && backspace_repeat_timer >= KEY_REPEAT_FRAMES
+                ) {
+                    if byte_index < text_input.len() {
+                        // Backspace in ASCII
+                        text_input[byte_index] = 8;
+                        backspace_repeat_timer = 0;
+                    }
+                }
             }
 
             let mut input_flags = 0;
@@ -398,6 +434,7 @@ mod raylib_rs_platform {
                 &mut state,
                 &mut commands,
                 input_flags,
+                text_input,
                 get_cursor_xy!(),
                 draw_wh(&rl)
             );
